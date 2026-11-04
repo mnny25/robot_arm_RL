@@ -1,0 +1,237 @@
+#usda 1.0
+# IMX219 8MP / 130-degree HFOV pinhole approximation
+# Sensor active area approx. 3.68 x 2.76 mm
+# Effective focal length approx. 0.858 mm for 130 deg horizontal FOV
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+    kilogramsPerUnit = 1
+)
+
+def Xform "World"
+{
+    def PhysicsScene "PhysicsScene"
+    {
+        vector3f physics:gravityDirection = (0, 0, -1)
+        float physics:gravityMagnitude = 9.81
+    }
+
+
+    def Scope "Looks"
+    {
+        def Material "FilmMaterial"
+        {
+            token outputs:surface.connect = </World/Looks/FilmMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/Looks/FilmMaterial/Texture.outputs:rgb>
+                float inputs:roughness = 0.8
+                float inputs:metallic = 0
+                token outputs:surface
+            }
+
+            def Shader "PrimvarReader_st"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                token inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "Texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @./physicai_arm_lite_sheet_film.png@
+                float2 inputs:st.connect = </World/Looks/FilmMaterial/PrimvarReader_st.outputs:result>
+                float3 outputs:rgb
+            }
+        }
+    }
+
+    def Xform "Environment"
+    {
+        # Original /World/GroundPlane authored at z=0.
+        def Mesh "GroundPlane" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            uniform token subdivisionScheme = "none"
+            bool doubleSided = true
+            color3f[] primvars:displayColor = [(0.32, 0.32, 0.34)]
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [
+                (-1.0, -1.0, 0.0),
+                ( 1.0, -1.0, 0.0),
+                ( 1.0,  1.0, 0.0),
+                (-1.0,  1.0, 0.0)
+            ]
+        }
+
+        # Original basket1 effective placement after cm->m conversion.
+        def Xform "Basket1" (
+            prepend references = @./basket-Body.usd@
+        )
+        {
+            double3 xformOp:translate = (0.199, 0.1710000025, 0.0666823750)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        # Original basket2 effective placement after cm->m conversion.
+        def Xform "Basket2" (
+            prepend references = @./basket-Body.usd@
+        )
+        {
+            double3 xformOp:translate = (-0.2010000179, 0.1700000025, 0.0666823750)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Xform "PhysicAI_Arm"
+    {
+
+        # Restored original checker/chess work-surface film.
+        # Original hierarchy:
+        # Base: rotateX(+90), unit scale 0.01
+        # film: rotateX(-90), scale(60,60,1), translate(0,6.6,2)
+        # Effective clean-scene result: 0.6m x 0.6m horizontal plane,
+        # centered at approximately (0, -0.02, 0.066)m.
+        def Mesh "film" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token subdivisionScheme = "none"
+            bool doubleSided = true
+
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 3, 2]
+
+            point3f[] points = [
+                (-0.3, -0.3, 0),
+                ( 0.3, -0.3, 0),
+                (-0.3,  0.3, 0),
+                ( 0.3,  0.3, 0)
+            ]
+
+            normal3f[] normals = [
+                (0, 0, 1),
+                (0, 0, 1),
+                (0, 0, 1),
+                (0, 0, 1)
+            ] (
+                interpolation = "faceVarying"
+            )
+
+            texCoord2f[] primvars:st = [
+                (0, 0),
+                (1, 0),
+                (1, 1),
+                (0, 1)
+            ] (
+                interpolation = "faceVarying"
+            )
+
+            rel material:binding = </World/Looks/FilmMaterial>
+
+            # +0.0005 m avoids z-fighting with the physical work surface.
+            double3 xformOp:translate = (0, -0.02, 0.0665)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        # The clean Frame asset already stores the STL in meters.
+        # These values reproduce the original Base/node_/mesh_ placement:
+        # Base +90deg X + 0.01 unit conversion, child -90deg X + 0.1 mesh scale.
+        def Xform "Frame" (
+            prepend references = @./PhysicAI-ARM-Lite-260303.usd@
+        )
+        {
+            double3 xformOp:translate = (-0.3, -0.3199245799, 0.0300000004)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        # Original authored robot transform. This replaces only the broken
+        # SO101 reference path with the newly rebuilt robot USD.
+        def Xform "Robot" (
+            prepend references = @./robot/so101_robot.usd@
+        )
+        {
+            double3 xformOp:translate = (0.0, 0.25, 0.0713495945)
+            quatd xformOp:orient = (0.7071067811865476, 0, 0, -0.7071067811865475)
+            double3 xformOp:scale = (1, 1, 1)
+            uniform token[] xformOpOrder = [
+                "xformOp:translate",
+                "xformOp:orient",
+                "xformOp:scale"
+            ]
+
+            # Original Front_Camera was authored below gripper_link.
+            over "gripper_link"
+            {
+                def Camera "Front_Camera"
+                {
+                    float focalLength = 0.858
+                    float horizontalAperture = 3.68
+                    float verticalAperture = 2.76
+                    float fStop = 2.0
+                    float2 clippingRange = (0.01, 100)
+                    double3 xformOp:translate = (
+                        0.0072315196330542675,
+                        -0.05500000000000109,
+                        -0.061000000000000054
+                    )
+                    quatd xformOp:orient = (
+                        -0.6588428145857625,
+                        -0.24395817781864038,
+                        -0.2689471055279644,
+                        0.6588459664991879
+                    )
+                    double3 xformOp:scale = (
+                        0.10000000149011612,
+                        0.10000000149011612,
+                        0.10000000149011612
+                    )
+                    uniform token[] xformOpOrder = [
+                        "xformOp:translate",
+                        "xformOp:orient",
+                        "xformOp:scale"
+                    ]
+                }
+            }
+        }
+    }
+
+    def Xform "Cameras"
+    {
+        # Original Top_Camera was under Base, whose effective conversion was
+        # +90deg X and scale 0.01. Applying that conversion gives this clean
+        # world-space position. The +90/-90 X rotations cancel.
+        def Camera "Top_Camera"
+        {
+            float focalLength = 0.858
+            float horizontalAperture = 3.68
+            float verticalAperture = 2.76
+            float fStop = 2.0
+            float2 clippingRange = (0.01, 100)
+            double3 xformOp:translate = (
+                0.0005762246596892685,
+                0.006160329727189396,
+                0.5804806156857856
+            )
+            quatd xformOp:orient = (1, 0, 0, 0)
+            uniform token[] xformOpOrder = [
+                "xformOp:translate",
+                "xformOp:orient"
+            ]
+        }
+    }
+
+    def DistantLight "KeyLight"
+    {
+        float intensity = 1500
+        float angle = 1
+        float3 xformOp:rotateXYZ = (35, -25, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+}
