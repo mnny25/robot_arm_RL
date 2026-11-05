@@ -123,7 +123,8 @@ class PushEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None): # 한 에피소드의 시작 조건
         super().reset(seed=seed) # 목표는 reset 때 한 번 정해지고, 그 에피소드 동안 고정됨
-
+        self.stable_time = 0.0
+        
         mujoco.mj_resetData(self.model, self.data) # 초기 상태로 되돌림
         
         # XML에 정의된 큐브 초기 위치를 기준으로 XY만 변경
@@ -197,6 +198,31 @@ class PushEnv(gym.Env):
 
         # 테이블 윗면 z=0, 큐브 절반 높이 0.02m 기준
         on_table_height = abs(cube_pos[2] - 0.02) < 0.01
+        
+        cube_velocity = self.data.qvel[
+            self.cube_dof_id:self.cube_dof_id + 6
+        ]
+
+        linear_speed = float(np.linalg.norm(cube_velocity[:3]))
+        angular_speed = float(np.linalg.norm(cube_velocity[3:]))
+
+        # 첫 실험용 기준: 목표 안에서 거의 정지
+        stable = (
+            goal_distance < 0.03
+            and on_table_height
+            and linear_speed < 0.02   # 2cm/s 미만
+            and angular_speed < 0.2   # 0.2rad/s 미만
+        )
+
+        control_dt = self.frame_skip * self.model.opt.timestep
+
+        if stable:
+            self.stable_time += control_dt
+        else:
+            self.stable_time = 0.0
+
+        # 위 조건을 연속 0.5초 유지해야 성공
+        success = bool(self.stable_time >= 0.5)
 
         success = bool(
             goal_distance < 0.03 and on_table_height
@@ -226,6 +252,8 @@ class PushEnv(gym.Env):
             "ee_distance": ee_distance,
             "is_success": success,
             "fallen": fallen,
+            "cube_speed": linear_speed,
+            "stable_time": self.stable_time,
         }
 
         return (
