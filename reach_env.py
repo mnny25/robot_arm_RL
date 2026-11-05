@@ -57,9 +57,9 @@ class ReachEnv(gym.Env):
         )
 
         self.action_scale = 0.03  # 목표 각도 증분의 최대 크기 [rad]
-        self.max_steps = 200
+        self.max_steps = 200 # action 200회, 주기 20Hz, 에피소드 최대 길이 10초
 
-        self.action_space = spaces.Box(
+        self.action_space = spaces.Box( # -1부터 1사이의 숫자 4개를 정책이 환경에 전달하는 행동
             low=-1.0,
             high=1.0,
             shape=(5,),
@@ -78,7 +78,7 @@ class ReachEnv(gym.Env):
         self.steps = 0
         
     
-    def _get_obs(self):
+    def _get_obs(self): # observation: PPO가 로봇에 대해 아는 정보
         q = self.data.qpos[self.qpos_ids]
         v = self.data.qvel[self.qvel_ids]
 
@@ -86,16 +86,16 @@ class ReachEnv(gym.Env):
         relative_goal = self.goal - ee_pos
 
         return np.concatenate([
-            q,
-            v,
-            self.joint_target,
-            relative_goal,
+            q, # 관절 각도
+            v, # 관절 속도
+            self.joint_target, # 명령 각도
+            relative_goal, # 목표 상대 위치
         ]).astype(np.float32)
 
-    def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)
+    def reset(self, *, seed=None, options=None): # 한 에피소드의 시작 조건
+        super().reset(seed=seed) # 목표는 reset 때 한 번 정해지고, 그 에피소드 동안 고정됨
 
-        mujoco.mj_resetData(self.model, self.data)
+        mujoco.mj_resetData(self.model, self.data) # 초기 상태로 되돌림
 
         self.steps = 0
         self.joint_target = self.data.qpos[self.qpos_ids].copy()
@@ -105,11 +105,28 @@ class ReachEnv(gym.Env):
 
         # 초기 EE 위치 근처에 고정된 목표 설정
         initial_ee = self.data.site("gripperframe").xpos.copy()
-        self.goal = initial_ee + np.array([-0.04, 0.02, -0.02])
+        
+        # 초기 EE를 기준으로 뒤쪽·아래쪽의 목표를 샘플링
+        offset = self.np_random.uniform(
+            low=np.array([-0.10, -0.04, -0.06]),
+            high=np.array([-0.03, 0.04, -0.02]),
+        )
+
+        self.goal = initial_ee + offset
 
         return self._get_obs(), {}
     
     def step(self, action):
+        
+        # 물리 1스텝 = 0.005초
+
+        # frame_skip = 0.05 / 0.005 = 10
+
+        # action 1회
+        # → 물리 계산 10회
+        # → 시뮬레이션 시간 0.05초 진행
+        # E따라서 정책의 제어 주기는 약 20Hz
+        
         action = np.clip(
             np.asarray(action, dtype=np.float64),
             -1.0,
@@ -136,17 +153,17 @@ class ReachEnv(gym.Env):
         ee_pos = self.data.site("gripperframe").xpos
         distance = float(np.linalg.norm(self.goal - ee_pos))
 
-        success = distance < 0.01
+        success = distance < 0.01 # 집게 끝의 기준점이 공중에 설정된 목표에서 1cm이내인가
 
         # 거리와 과도한 행동에 비용 부여
-        reward = -10.0 * distance
-        reward -= 0.01 * float(np.sum(action**2))
+        reward = -10.0 * distance # 목표에 가까울수록 덜 부정적인 값을 받음
+        reward -= 0.01 * float(np.sum(action**2)) # 불필요하게 큰 명령을 줄이려는 항
 
         if success:
-            reward += 10.0
+            reward += 10.0 # 목표와 1cm 미만이면 보너스 +10을 받음
 
-        terminated = bool(success)
-        truncated = bool(
+        terminated = bool(success) # 목표 도달로 종료
+        truncated = bool( # 제한 시간까지 성공하지 못해 중단됨
             self.steps >= self.max_steps and not terminated
         )
 

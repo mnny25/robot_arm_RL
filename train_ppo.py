@@ -7,7 +7,7 @@ from reach_env import ReachEnv
 
 
 if __name__ == "__main__":
-    output_dir = Path(__file__).resolve().parent / "results" / "ppo_reach"
+    output_dir = Path(__file__).resolve().parent / "results" / "ppo_reach_random"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Monitor가 에피소드 보상과 길이를 기록

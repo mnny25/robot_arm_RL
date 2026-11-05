@@ -17,8 +17,42 @@
             reflectance="0.2" />
     </asset>
 
-    <worldbody>
+    <!-- <worldbody>
         <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
         <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+    </worldbody> -->
+
+    <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+
+        <!-- 바닥을 테이블 아래로 내림 -->
+        <geom name="floor"
+            type="plane"
+            pos="0 0 -0.7"
+            size="0 0 0.05"
+            material="groundplane"/>
+
+        <!-- 테이블 윗면: z=0 -->
+        <geom name="table_top"
+            type="box"
+            pos="0.15 0 -0.02"
+            size="0.4 0.3 0.02"
+            rgba="0.6 0.45 0.3 1"/>
+
+        <body name="cube" pos="0.22 0 0.025">
+            <freejoint name="cube_free"/>
+
+            <geom name="cube_geom"
+                type="box"
+                size="0.02 0.02 0.02"
+                mass="0.05"
+                rgba="0.9 0.3 0.1 1"/>
+        </body>
+
+        <site name="target"
+            type="cylinder"
+            pos="0.30 0.06 0.001"
+            size="0.03 0.001"
+            rgba="0.1 0.9 0.3 0.5"/>
     </worldbody>
 </mujoco>
