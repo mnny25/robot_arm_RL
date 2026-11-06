@@ -165,6 +165,12 @@ class PushEnv(gym.Env):
 
         self.goal = self.data.site("target").xpos.copy()
         
+        cube_pos = self.data.body("cube").xpos
+
+        self.prev_goal_distance = float(
+            np.linalg.norm(self.goal[:2] - cube_pos[:2])
+        )
+        
 
         return self._get_obs(), {}
     
@@ -214,6 +220,12 @@ class PushEnv(gym.Env):
         goal_distance = float(
             np.linalg.norm(self.goal[:2] - cube_pos[:2])
         )
+        
+        # 양수: 목표에 가까워짐
+        # 음수: 목표에서 멀어짐
+        progress = self.prev_goal_distance - goal_distance
+
+        self.prev_goal_distance = goal_distance
 
         # 테이블 윗면 z=0, 큐브 절반 높이 0.02m 기준
         on_table_height = abs(cube_pos[2] - 0.02) < 0.01
@@ -253,6 +265,9 @@ class PushEnv(gym.Env):
         reward = -1.0 * ee_distance
         reward -= 5.0 * goal_distance
         reward -= 0.01 * float(np.sum(action**2))
+        
+        # 추가: 목표 방향으로 이동한 정도에 대한 보상
+        reward += 20.0 * progress
 
         if success:
             reward += 10.0
@@ -276,6 +291,7 @@ class PushEnv(gym.Env):
             "friction": float(
                 self.model.geom_friction[self.cube_geom_id, 0]
             ),
+            "progress": float(progress),
         }
 
         return (
