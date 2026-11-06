@@ -9,7 +9,7 @@ import mujoco.viewer
 
 
 class PushEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, randomize_friction=False):
         super().__init__()
 
         model_path = (
@@ -21,6 +21,11 @@ class PushEnv(gym.Env):
 
         self.model = mujoco.MjModel.from_xml_path(str(model_path))
         self.data = mujoco.MjData(self.model)
+        
+        self.randomize_friction = randomize_friction
+
+        self.table_geom_id = self.model.geom("table_top").id
+        self.cube_geom_id = self.model.geom("cube_geom").id
 
         arm_names = [
             "shoulder_pan",
@@ -137,6 +142,20 @@ class PushEnv(gym.Env):
         self.data.qpos[
             self.cube_qpos_id:self.cube_qpos_id + 2
         ] += cube_xy_offset
+        
+        # 에피소드가 시작할 때만 마찰 변경
+        if self.randomize_friction:
+            friction = float(
+                self.np_random.uniform(0.5, 1.5)
+            )
+
+            self.model.geom_friction[
+                self.table_geom_id, 0
+            ] = friction
+
+            self.model.geom_friction[
+                self.cube_geom_id, 0
+            ] = friction
 
         self.steps = 0
         self.joint_target = self.data.qpos[self.qpos_ids].copy()
@@ -254,6 +273,9 @@ class PushEnv(gym.Env):
             "fallen": fallen,
             "cube_speed": linear_speed,
             "stable_time": self.stable_time,
+            "friction": float(
+                self.model.geom_friction[self.cube_geom_id, 0]
+            ),
         }
 
         return (
