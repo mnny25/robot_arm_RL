@@ -1,21 +1,21 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import time
 
 import mujoco.viewer
 from stable_baselines3 import PPO
 
-from push_env import PushEnv
+from reach.reach_env import ReachEnv
 
 
 if __name__ == "__main__":
     model_path = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "results"
-        / "ppo_push_003"
-        / "ppo_push.zip"
+        / "ppo_reach_random"
+        / "ppo_reach.zip"
     )
 
-    env = PushEnv()
+    env = ReachEnv()
     policy = PPO.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
 
     obs, info = env.reset(seed=0)
@@ -56,9 +56,7 @@ if __name__ == "__main__":
                 print(
                     f"시도 {episode} | "
                     f"성공={info['is_success']} | "
-                    f"EE–큐브={info['ee_distance'] * 1000:.1f} mm | "
-                    f"큐브–목표={info['distance'] * 1000:.1f} mm | "
-                    f"낙하={info['fallen']} | "
+                    f"최종 거리={info['distance'] * 1000:.2f} mm | "
                     f"스텝={env.steps} | "
                     f"누적 보상={episode_reward:.2f}"
                 )

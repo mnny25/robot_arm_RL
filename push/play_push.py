@@ -1,21 +1,22 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import time
 
 import mujoco.viewer
-from stable_baselines3 import SAC
+from stable_baselines3 import PPO
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
 if __name__ == "__main__":
     model_path = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "results"
-        / "sac_gpu_test.zip"
+        / "ppo_push_003"
+        / "ppo_push.zip"
     )
 
-    env = PushEnv(randomize_friction=False)
-    policy = SAC.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
+    env = PushEnv()
+    policy = PPO.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
 
     obs, info = env.reset(seed=0)
     control_dt = env.frame_skip * env.model.opt.timestep

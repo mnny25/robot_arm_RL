@@ -1,4 +1,4 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import csv
 
 import mujoco
@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO, SAC
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
 def evaluate(policy, name, seeds, friction):
@@ -116,7 +116,7 @@ def print_summary(name, rows):
 if __name__ == "__main__":
     torch.set_num_threads(1)
 
-    root = Path(__file__).resolve().parent
+    root = PROJECT_ROOT
     seeds = list(range(100))
 
     policies = [

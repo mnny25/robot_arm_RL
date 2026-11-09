@@ -1,45 +1,22 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import time
 
-import argparse
-
 import mujoco.viewer
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--policy",
-        choices=["original", "dr"],
-        default="original",
-    )
-    args = parser.parse_args()
-
-    policy_folder = {
-        "original": "ppo_push_003",
-        "dr": "ppo_push_dr_001",
-    }[args.policy]
-
     model_path = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "results"
-        / policy_folder
-        / "ppo_push.zip"
+        / "sac_push_002"
+        / "sac_push.zip"
     )
 
-    env = PushEnv(randomize_friction=False)
-    
-    policy = PPO.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
-    
-    for geom_name in ("table_top", "cube_geom"):
-        geom_id = env.model.geom(geom_name).id
-        env.model.geom_friction[geom_id, 0] = 1.5
-
-    print("평가 정책:", policy_folder)
-    print("미끄럼 마찰계수: 1.5")
+    env = PushEnv()
+    policy = SAC.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
 
     obs, info = env.reset(seed=0)
     control_dt = env.frame_skip * env.model.opt.timestep
@@ -95,8 +72,7 @@ if __name__ == "__main__":
 
                 episode += 1
                 episode_reward = 0.0
-
-                obs, info = env.reset(seed=episode - 1)
+                obs, info = env.reset()
 
             elapsed = time.perf_counter() - start
             time.sleep(max(0.0, control_dt - elapsed))

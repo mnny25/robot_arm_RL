@@ -1,22 +1,21 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import time
 
 import mujoco.viewer
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 
-from reach_env import ReachEnv
+from push.push_env import PushEnv
 
 
 if __name__ == "__main__":
     model_path = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "results"
-        / "ppo_reach_random"
-        / "ppo_reach.zip"
+        / "sac_gpu_test.zip"
     )
 
-    env = ReachEnv()
-    policy = PPO.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
+    env = PushEnv(randomize_friction=False)
+    policy = SAC.load(str(model_path), device="cpu") # 저장된 정책을 불러옴
 
     obs, info = env.reset(seed=0)
     control_dt = env.frame_skip * env.model.opt.timestep
@@ -56,7 +55,9 @@ if __name__ == "__main__":
                 print(
                     f"시도 {episode} | "
                     f"성공={info['is_success']} | "
-                    f"최종 거리={info['distance'] * 1000:.2f} mm | "
+                    f"EE–큐브={info['ee_distance'] * 1000:.1f} mm | "
+                    f"큐브–목표={info['distance'] * 1000:.1f} mm | "
+                    f"낙하={info['fallen']} | "
                     f"스텝={env.steps} | "
                     f"누적 보상={episode_reward:.2f}"
                 )

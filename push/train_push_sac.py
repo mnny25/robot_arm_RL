@@ -1,11 +1,11 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import torch
 import time
 
 from stable_baselines3 import SAC
 from stable_baselines3.common.monitor import Monitor
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
 if __name__ == "__main__":
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     print("PyTorch 스레드 수:", torch.get_num_threads())
     
     output_dir = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "results"
         / "sac_push_002"
     )

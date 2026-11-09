@@ -1,4 +1,4 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 import time
 
 import mujoco
@@ -14,7 +14,7 @@ def smoothstep(start, end, elapsed, duration):
 
 if __name__ == "__main__":
     model_path = (
-        Path(__file__).resolve().parent
+        PROJECT_ROOT
         / "modelingfile"
         / "robot"
         / "scene.xml"

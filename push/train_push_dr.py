@@ -1,18 +1,18 @@
-from pathlib import Path
+from project_paths import PROJECT_ROOT
 
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
 
-    root = Path(__file__).resolve().parent
+    root = PROJECT_ROOT
 
-    output_dir = root / "results" / "ppo_push_progress_001"
+    output_dir = root / "results" / "ppo_push_dr_001"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     env = Monitor(
@@ -23,12 +23,12 @@ if __name__ == "__main__":
             "distance",
             "ee_distance",
             "friction",
-            "progress",
         ),
     )
 
+    # 기존에 잘 작동한 PPO 정책에서 추가 학습
     model = PPO.load(
-        str(root / "results/ppo_push_dr_001/ppo_push.zip"),
+        str(root / "results/ppo_push_003/ppo_push.zip"),
         env=env,
         device="cpu",
     )

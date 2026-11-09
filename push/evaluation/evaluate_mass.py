@@ -1,31 +1,27 @@
-from pathlib import Path
-import csv
-
 import mujoco
+from project_paths import PROJECT_ROOT
+import csv
 
 import numpy as np
 import torch
 from stable_baselines3 import PPO, SAC
 
-from push_env import PushEnv
+from push.push_env import PushEnv
 
 
-def evaluate(policy, name, seeds, friction):
+def evaluate(policy, name, seeds, mass_kg):
     env = PushEnv()
-    # 질량은 기존 50g인지 확인
-    cube_body_id = env.model.body("cube").id
+    
+    # 큐브의 질량과 관성을 같은 비율로 변경
+    cube_id = env.model.body("cube").id
+    original_mass = float(env.model.body_mass[cube_id])
+    scale = mass_kg / original_mass
 
-    if not np.isclose(
-        env.model.body_mass[cube_body_id], 0.05
-    ):
-        raise ValueError("큐브 질량이 50g인지 확인하세요.")
+    env.model.body_mass[cube_id] = mass_kg
+    env.model.body_inertia[cube_id] *= scale
 
-    table_geom_id = env.model.geom("table_top").id
-    cube_geom_id = env.model.geom("cube_geom").id
-
-    # 첫 번째 값인 미끄럼 마찰계수만 변경
-    env.model.geom_friction[table_geom_id, 0] = friction
-    env.model.geom_friction[cube_geom_id, 0] = friction
+    # 변경된 물리 파라미터로 내부 상수 재계산
+    mujoco.mj_setConst(env.model, env.data)
 
     rows = []
     control_dt = env.frame_skip * env.model.opt.timestep
@@ -72,12 +68,12 @@ def evaluate(policy, name, seeds, friction):
                 "max_speed_m_s": max_speed,
                 "max_height_mm": max_height * 1000,
                 "reward": total_reward,
-                "friction": friction,
+                "mass_g": mass_kg * 1000,
             })
 
             if episode % 10 == 0:
                 print(
-                    f"{name} / 마찰 {friction}: "
+                    f"{name} / {mass_kg * 1000:.0f}g: "
                     f"{episode}/{len(seeds)} 완료"
                 )
     finally:
@@ -116,7 +112,7 @@ def print_summary(name, rows):
 if __name__ == "__main__":
     torch.set_num_threads(1)
 
-    root = Path(__file__).resolve().parent
+    root = PROJECT_ROOT
     seeds = list(range(100))
 
     policies = [
@@ -138,18 +134,19 @@ if __name__ == "__main__":
 
     all_rows = []
 
-    frictions = [1.0, 0.25, 0.5, 1.5]
+    # 기준 질량인 50g부터 확인
+    masses_kg = [0.05, 0.025, 0.075, 0.10]
 
-    for friction in frictions:
+    for mass_kg in masses_kg:
         for name, policy in policies:
-            rows = evaluate(policy, name, seeds, friction)
+            rows = evaluate(policy, name, seeds, mass_kg)
 
-            label = f"{name} / 마찰 {friction}"
+            label = f"{name} / 큐브 {mass_kg * 1000:.0f}g"
             print_summary(label, rows)
 
             all_rows.extend(rows)
 
-    output = root / "results/push_friction_comparison.csv"
+    output = root / "results/push_mass_comparison.csv"
 
     with output.open("w", newline="", encoding="utf-8-sig") as file:
         writer = csv.DictWriter(

@@ -1,0 +1,61 @@
+<mujoco model="scene">
+    <include file="so101_grasp.xml" />
+
+    <!-- 파지 중 접선 방향의 수치적 미끄러짐을 줄이기 위한 접촉 설정 -->
+    <option cone="elliptic" impratio="10"/>
+
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512"
+            height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4"
+            rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"
+            reflectance="0.2" />
+    </asset>
+
+    <!-- <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+    </worldbody> -->
+
+    <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+
+        <!-- 바닥을 테이블 아래로 내림 -->
+        <geom name="floor"
+            type="plane"
+            pos="0 0 -0.7"
+            size="0 0 0.05"
+            material="groundplane"/>
+
+        <!-- 테이블 윗면: z=0 -->
+        <geom name="table_top"
+            type="box"
+            pos="0.15 0 -0.02"
+            size="0.4 0.3 0.02"
+            rgba="0.6 0.45 0.3 1"/>
+
+        <body name="cube" pos="0.22 0 0.025">
+            <freejoint name="cube_free"/>
+
+            <geom name="cube_geom"
+                type="box"
+                size="0.02 0.02 0.02"
+                mass="0.05"
+                rgba="0.9 0.3 0.1 1"/>
+        </body>
+
+        <site name="target"
+            type="cylinder"
+            pos="0.30 0.06 0.001"
+            size="0.03 0.001"
+            rgba="0.1 0.9 0.3 0.5"/>
+    </worldbody>
+</mujoco>
