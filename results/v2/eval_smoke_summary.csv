@@ -1,0 +1,7 @@
+﻿config,algo,condition,split,n_runs,success_mean,success_std,max_cube_speed_mean,final_dist_mm_mean
+rand,ppo,nominal,grid,1,0.0,0.0,0.010746752503967364,89.99999528382556
+rand,ppo,nominal,nominal,1,0.0,0.0,0.010746752476813748,100.00005432312336
+rand,ppo,nominal,ood,1,0.0,0.0,0.010746752479080447,108.00003033005532
+rand,sac,nominal,grid,1,0.0,0.0,0.010746752503967364,89.99999527866382
+rand,sac,nominal,nominal,1,0.0,0.0,0.010746752476813748,100.00005427053308
+rand,sac,nominal,ood,1,0.0,0.0,0.010746752479080447,108.00003029594396
