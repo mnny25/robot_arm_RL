@@ -5,8 +5,8 @@
 #   bash push/run_experiments.sh smoke     # 1분짜리 동작 확인
 #   bash push/run_experiments.sh phase1    # hold 효과: fixed_nohold vs fixed_hold (PPO, 시드 3개)
 #   bash push/run_experiments.sh phase1b   # 학습량 150만: fixed_hold vs fixed_hold_pp (PPO, 시드 3개)
-#   bash push/run_experiments.sh phase2   # 랜덤화: rand PPO vs SAC (시드 3개)
-#   bash push/run_experiments.sh phase3    # DR: rand / rand_dr_friction / rand_dr_full (PPO, 시드 3개)
+#   bash push/run_experiments.sh phase2    # 랜덤화: rand_pp PPO(300만) vs SAC(150만), 시드 3개
+#   bash push/run_experiments.sh phase3    # DR: rand_pp_dr_friction / _dr_full / _dr_full_real (PPO 300만, 시드 3개)
 #
 # 환경변수로 조절:
 #   SEEDS="0 1 2"  STEPS=1000000  N_ENVS=8  MAX_JOBS=3
@@ -64,17 +64,20 @@ case "$PHASE" in
     done
     ;;
   phase2)
-    STEPS=${STEPS:-2000000}
-    for s in $SEEDS; do
-      run rand ppo "$s" "$STEPS" --n-envs "$N_ENVS"
-      run rand sac "$s" "$STEPS"
-    done
+    # 위치 랜덤화 + push point: PPO vs SAC
+    # SAC는 스텝당 시간이 길어서 먼저 띄우고 스텝 수를 줄임 (코어 1개씩만 사용)
+    PPO_STEPS=${PPO_STEPS:-3000000}
+    SAC_STEPS=${SAC_STEPS:-1500000}
+    for s in $SEEDS; do run rand_pp sac "$s" "$SAC_STEPS"; done
+    for s in $SEEDS; do run rand_pp ppo "$s" "$PPO_STEPS" --n-envs "$N_ENVS"; done
     ;;
   phase3)
-    STEPS=${STEPS:-2000000}
+    # DR: phase2의 rand_pp PPO가 비교 기준
+    STEPS=${STEPS:-3000000}
     for s in $SEEDS; do
-      run rand_dr_friction ppo "$s" "$STEPS" --n-envs "$N_ENVS"
-      run rand_dr_full     ppo "$s" "$STEPS" --n-envs "$N_ENVS"
+      run rand_pp_dr_friction  ppo "$s" "$STEPS" --n-envs "$N_ENVS"
+      run rand_pp_dr_full      ppo "$s" "$STEPS" --n-envs "$N_ENVS"
+      run rand_pp_dr_full_real ppo "$s" "$STEPS" --n-envs "$N_ENVS"
     done
     ;;
   *)

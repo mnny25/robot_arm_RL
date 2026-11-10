@@ -16,6 +16,9 @@ FULL_DR = {
     "action_delay_max": 2,        # 0~2 스텝(0~0.1초) 지연
 }
 
+# EE를 '밀 위치'(큐브의 목표 반대편)로 유도하는 보상 설정
+PP = {"ee_target": "push_point", "w_ee": 2.0}
+
 CONFIGS = {
     # ---- Phase 1: 성공 판정(hold) 효과 확인, 위치 고정 ----
     # 기존 실험 재현용: 원에 들어가는 순간 성공, 속도 페널티 없음
@@ -67,6 +70,20 @@ CONFIGS = {
     # 실물에서 얻기 쉬운 관측만 사용 (큐브 자세·속도 제외)
     "rand_dr_full_real": {
         "env": {"range_scale": 1.0, "dr": FULL_DR, "obs_mode": "real"},
+        "curriculum": True,
+    },
+
+    # ---- Phase 3 (push point 버전): Phase 2의 rand_pp가 비교 기준 ----
+    "rand_pp_dr_friction": {
+        "env": {**PP, "range_scale": 1.0, "dr": {"friction": (0.5, 1.5)}},
+        "curriculum": True,
+    },
+    "rand_pp_dr_full": {
+        "env": {**PP, "range_scale": 1.0, "dr": FULL_DR},
+        "curriculum": True,
+    },
+    "rand_pp_dr_full_real": {
+        "env": {**PP, "range_scale": 1.0, "dr": FULL_DR, "obs_mode": "real"},
         "curriculum": True,
     },
 }
