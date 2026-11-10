@@ -1,0 +1,3 @@
+﻿config,algo,condition,split,n_runs,success_mean,success_std,max_cube_speed_mean,max_cube_speed_success_mean,n_success,final_dist_mm_mean
+fixed_hold,ppo,nominal,nominal,3,1.0,0.0,0.38257904817323246,0.38257904817323246,3,22.727385700818136
+fixed_hold_pp,ppo,nominal,nominal,3,1.0,0.0,0.3052483292039366,0.3052483292039366,3,23.43858146082437

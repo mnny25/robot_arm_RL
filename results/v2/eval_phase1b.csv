@@ -1,0 +1,7 @@
+﻿run,config,algo,seed,model,suite,condition,split,task_id,cube_x,cube_y,goal_x,goal_y,success,fallen,steps,time_s,final_dist_mm,max_cube_speed,return
+fixed_hold_pp_ppo_s0_long,fixed_hold_pp,ppo,0,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,50,2.5,21.90303665830495,0.48951255873648253,-21.128243457453184
+fixed_hold_pp_ppo_s1_long,fixed_hold_pp,ppo,1,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,103,5.15,27.108237142820332,0.03960301460279102,-40.91501382215462
+fixed_hold_pp_ppo_s2_long,fixed_hold_pp,ppo,2,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,51,2.5500000000000003,21.30447058134783,0.38662941427253633,-19.915570647236848
+fixed_hold_ppo_s0_long,fixed_hold,ppo,0,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,53,2.6500000000000004,20.218799122053106,0.4508785435796024,-16.406579030295923
+fixed_hold_ppo_s1_long,fixed_hold,ppo,1,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,52,2.6,25.78473577028466,0.48199331186420213,-15.142556391243694
+fixed_hold_ppo_s2_long,fixed_hold,ppo,2,best,nominal,nominal,nominal,0,0.22,0.0,0.3,0.06,True,False,122,6.1000000000000005,22.17862221011664,0.2148652890758929,-44.854793546959456

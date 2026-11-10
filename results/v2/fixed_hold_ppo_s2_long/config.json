@@ -1,0 +1,80 @@
+{
+  "run_name": "fixed_hold_ppo_s2_long",
+  "config_name": "fixed_hold",
+  "algo": "ppo",
+  "seed": 2,
+  "total_steps": 1500000,
+  "n_envs": 6,
+  "device": "cpu",
+  "curriculum": false,
+  "env_config": {
+    "max_steps": 200,
+    "control_dt": 0.05,
+    "action_scale": 0.03,
+    "success_radius": 0.03,
+    "require_stable": true,
+    "hold_time": 0.5,
+    "stable_lin_speed": 0.03,
+    "stable_ang_speed": 0.5,
+    "w_ee": 1.0,
+    "ee_target": "cube",
+    "push_margin": 0.015,
+    "w_goal": 5.0,
+    "w_progress": 20.0,
+    "w_action": 0.01,
+    "w_cube_speed": 1.0,
+    "cube_speed_free": 0.15,
+    "w_zone_speed": 2.0,
+    "time_penalty": 0.0,
+    "success_bonus": 10.0,
+    "fall_penalty": 10.0,
+    "nominal_cube_xy": [
+      0.22,
+      0.0
+    ],
+    "nominal_goal_xy": [
+      0.3,
+      0.06
+    ],
+    "cube_xy_half_range": [
+      0.04,
+      0.06
+    ],
+    "goal_dist_range": [
+      0.06,
+      0.12
+    ],
+    "goal_angle_center_deg": 0.0,
+    "goal_angle_half_range_deg": 60.0,
+    "cube_yaw_half_range_deg": 0.0,
+    "jitter": 0.01,
+    "range_scale": 0.0,
+    "workspace_x": [
+      0.14,
+      0.36
+    ],
+    "workspace_y": [
+      -0.14,
+      0.14
+    ],
+    "dr": null,
+    "obs_mode": "full"
+  },
+  "git": {
+    "commit": "f5f1dc171dd7b6f2536bc99fd9551870661a490c",
+    "dirty": true
+  },
+  "versions": {
+    "python": "3.12.9",
+    "mujoco": "4.0.0",
+    "gymnasium": "1.4.0",
+    "stable_baselines3": "2.9.2",
+    "torch": "2.15.0+cu132",
+    "cuda_available": true
+  },
+  "host": "devbox",
+  "started": "2026-11-10T14:37:17",
+  "command": "/home/pnudtn17/robot_arm_rl/push/train_v2.py --config fixed_hold --algo ppo --seed 2 --steps 1500000 --n-envs 6 --tag long",
+  "finished": "2026-11-10T15:06:35",
+  "trained_steps": 1506960
+}
