@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 서버 학습 결과·로그 (용량이 크므로 git에 올리지 않고 VS Code Download로 가져오기)
+results/v2/
+logs/
