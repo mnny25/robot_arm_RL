@@ -122,7 +122,7 @@ def summarize(rows):
     for r in rows:
         key = (r["config"], r["algo"], r["condition"], r["split"])
         per_run[(key, r["run"])].append(r["success"])
-        extra[key].append((r["max_cube_speed"], r["final_dist_mm"]))
+        extra[key].append((r["max_cube_speed"], r["final_dist_mm"], r["success"]))
     grouped = defaultdict(list)
     for (key, _run), succ in per_run.items():
         grouped[key].append(float(np.mean(succ)))
@@ -132,12 +132,15 @@ def summarize(rows):
         rates = grouped[key]
         sp = [e[0] for e in extra[key]]
         di = [e[1] for e in extra[key]]
+        sp_ok = [e[0] for e in extra[key] if e[2]]
         out.append({
             "config": key[0], "algo": key[1], "condition": key[2], "split": key[3],
             "n_runs": len(rates),
             "success_mean": float(np.mean(rates)),
             "success_std": float(np.std(rates)),
             "max_cube_speed_mean": float(np.mean(sp)),
+            "max_cube_speed_success_mean": float(np.mean(sp_ok)) if sp_ok else float("nan"),
+            "n_success": len(sp_ok),
             "final_dist_mm_mean": float(np.mean(di)),
         })
     return out
@@ -201,12 +204,14 @@ def main():
         w.writeheader()
         w.writerows(summary)
 
-    print("\n설정 / 알고리즘 / 조건 / split : 성공률 평균±표준편차 (run 수) | 최대 큐브속도 | 최종거리")
+    print("\n설정 / 알고리즘 / 조건 / split : 성공률 평균±표준편차 (run 수) | 최대 큐브속도 전체 / 성공만 | 최종거리")
     for s in summary:
+        ok_speed = s["max_cube_speed_success_mean"]
+        ok_text = f"{ok_speed:.2f} (성공 {s['n_success']}회)" if s["n_success"] else "- (성공 0회)"
         print(
             f"{s['config']:<18} {s['algo']:<4} {s['condition']:<16} {s['split']:<8}: "
             f"{s['success_mean']:.2f}±{s['success_std']:.2f} (n={s['n_runs']}) | "
-            f"{s['max_cube_speed_mean']:.2f} m/s | {s['final_dist_mm_mean']:.1f} mm"
+            f"{s['max_cube_speed_mean']:.2f} / {ok_text} m/s | {s['final_dist_mm_mean']:.1f} mm"
         )
     print("\n저장:", out, "/", sum_path)
 

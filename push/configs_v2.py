@@ -34,7 +34,17 @@ CONFIGS = {
         "curriculum": False,
     },
 
+    # 0.5초 정지 유지 + EE를 '밀 위치'(큐브의 목표 반대편)로 유도
+    "fixed_hold_pp": {
+        "env": {"range_scale": 0.0, "ee_target": "push_point", "w_ee": 2.0},
+        "curriculum": False,
+    },
+
     # ---- Phase 2: 큐브·목표 랜덤화 ----
+    "rand_pp": {
+        "env": {"range_scale": 1.0, "ee_target": "push_point", "w_ee": 2.0},
+        "curriculum": True,
+    },
     "rand": {
         "env": {"range_scale": 1.0},
         "curriculum": True,

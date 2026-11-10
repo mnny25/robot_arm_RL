@@ -55,7 +55,9 @@ DEFAULT_CONFIG = {
     # 주의: 성공 전까지의 스텝 보상은 항상 0 이하가 되도록 설계했습니다.
     # 원 안에 있을 때 +보상을 주면, 성공(종료)하지 않고 원 근처에 머물며
     # 보상을 계속 모으는 '보상 해킹'이 생길 수 있기 때문입니다.
-    "w_ee": 1.0,               # EE-큐브 거리
+    "w_ee": 1.0,               # EE-큐브(또는 밀 위치) 거리
+    "ee_target": "cube",       # "cube": 큐브 중심 / "push_point": 큐브의 목표 반대편 지점
+    "push_margin": 0.015,      # push_point가 큐브 면에서 떨어진 거리 [m]
     "w_goal": 5.0,             # 큐브-목표 거리
     "w_progress": 20.0,        # 목표 쪽으로 가까워진 정도 (+)
     "w_action": 0.01,          # 행동 크기
@@ -386,6 +388,15 @@ class PushEnvV2(gym.Env):
         ee_distance = float(np.linalg.norm(cube_pos - ee_pos))
         goal_distance = float(np.linalg.norm(self.goal[:2] - cube_pos[:2]))
         progress = self.prev_goal_distance - goal_distance
+
+        # 보상에 쓰는 EE 목표점
+        ee_reward_distance = ee_distance
+        if cfg["ee_target"] == "push_point" and goal_distance > cfg["success_radius"]:
+            # 큐브 → 목표 방향의 반대편, 큐브 면에서 push_margin 떨어진 지점
+            direction = (self.goal[:2] - cube_pos[:2]) / goal_distance
+            push_point = cube_pos.copy()
+            push_point[:2] -= direction * (CUBE_HALF + cfg["push_margin"])
+            ee_reward_distance = float(np.linalg.norm(push_point - ee_pos))
         self.prev_goal_distance = goal_distance
 
         on_table = abs(cube_pos[2] - CUBE_HALF) < 0.01
@@ -404,7 +415,7 @@ class PushEnvV2(gym.Env):
         fallen = bool(cube_pos[2] < -0.02)
 
         # ---- 보상 ----
-        reward = -cfg["w_ee"] * ee_distance
+        reward = -cfg["w_ee"] * ee_reward_distance
         reward -= cfg["w_goal"] * goal_distance
         reward += cfg["w_progress"] * progress
         reward -= cfg["w_action"] * float(np.sum(action ** 2))
@@ -425,6 +436,7 @@ class PushEnvV2(gym.Env):
             "fallen": fallen,
             "distance": goal_distance,
             "ee_distance": ee_distance,
+            "ee_reward_distance": ee_reward_distance,
             "in_zone": bool(in_zone),
             "stable_time": self.stable_count * self.control_dt,
             "cube_speed": lin_speed,

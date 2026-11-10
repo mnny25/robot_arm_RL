@@ -4,7 +4,8 @@
 # 사용법 (프로젝트 루트에서):
 #   bash push/run_experiments.sh smoke     # 1분짜리 동작 확인
 #   bash push/run_experiments.sh phase1    # hold 효과: fixed_nohold vs fixed_hold (PPO, 시드 3개)
-#   bash push/run_experiments.sh phase2    # 랜덤화: rand PPO vs SAC (시드 3개)
+#   bash push/run_experiments.sh phase1b   # 학습량 150만: fixed_hold vs fixed_hold_pp (PPO, 시드 3개)
+#   bash push/run_experiments.sh phase2   # 랜덤화: rand PPO vs SAC (시드 3개)
 #   bash push/run_experiments.sh phase3    # DR: rand / rand_dr_friction / rand_dr_full (PPO, 시드 3개)
 #
 # 환경변수로 조절:
@@ -28,6 +29,10 @@ export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 run() {  # run <config> <algo> <seed> <steps> [추가 인자]
   local cfg=$1 algo=$2 seed=$3 steps=$4; shift 4
   local name="${cfg}_${algo}_s${seed}"
+  local args=("$@") i
+  for ((i = 0; i < ${#args[@]}; i++)); do   # --tag가 있으면 로그 이름에도 붙임
+    if [ "${args[i]}" = "--tag" ]; then name="${name}_${args[i+1]}"; fi
+  done
   while [ "$(jobs -rp | wc -l)" -ge "$MAX_JOBS" ]; do sleep 10; done
   echo "[$(date '+%m-%d %H:%M')] 시작: $name ($steps steps)"
   python -m push.train_v2 --config "$cfg" --algo "$algo" --seed "$seed" --steps "$steps" "$@" \
@@ -50,6 +55,14 @@ case "$PHASE" in
       run fixed_hold   ppo "$s" "$STEPS" --n-envs "$N_ENVS"
     done
     ;;
+  phase1b)
+    # 학습량을 늘려서 hold vs hold+push point 비교 (결과 폴더 이름 끝에 _long)
+    STEPS=${STEPS:-1500000}
+    for s in $SEEDS; do
+      run fixed_hold    ppo "$s" "$STEPS" --n-envs "$N_ENVS" --tag long
+      run fixed_hold_pp ppo "$s" "$STEPS" --n-envs "$N_ENVS" --tag long
+    done
+    ;;
   phase2)
     STEPS=${STEPS:-2000000}
     for s in $SEEDS; do
@@ -65,7 +78,7 @@ case "$PHASE" in
     done
     ;;
   *)
-    echo "알 수 없는 단계: $PHASE (smoke | phase1 | phase2 | phase3)"; exit 1 ;;
+    echo "알 수 없는 단계: $PHASE (smoke | phase1 | phase1b | phase2 | phase3)"; exit 1 ;;
 esac
 wait
 echo "[$(date '+%m-%d %H:%M')] $PHASE 완료"
