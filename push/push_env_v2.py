@@ -58,6 +58,10 @@ DEFAULT_CONFIG = {
     "w_ee": 1.0,               # EE-큐브(또는 밀 위치) 거리
     "ee_target": "cube",       # "cube": 큐브 중심 / "push_point": 큐브의 목표 반대편 지점
     "push_margin": 0.015,      # push_point가 큐브 면에서 떨어진 거리 [m]
+    "push_point_height": 0.0,  # push_point 높이 = 큐브 중심(2cm) + 이 값 [m]. 올리면 EE가 테이블에서 떨어진 채 밀도록 유도
+    "w_table_contact": 0.0,    # 로봇(집게 등)이 테이블에 닿은 스텝마다 페널티 (Sim-to-Real: 테이블 긁기 방지)
+    "w_table_force": 0.0,      # 로봇-테이블 접촉 힘 [N]에 비례한 페널티 (table_force_cap에서 포화)
+    "table_force_cap": 20.0,   # 접촉 힘 페널티 상한 기준 [N]
     "w_goal": 5.0,             # 큐브-목표 거리
     "w_progress": 20.0,        # 목표 쪽으로 가까워진 정도 (+)
     "w_action": 0.01,          # 행동 크기
@@ -177,6 +181,8 @@ class PushEnvV2(gym.Env):
         self.max_cube_speed = 0.0
         self.physics = dict(NOMINAL_PHYSICS)
         self._ctrl_queue: deque = deque(maxlen=1)
+        self.table_contact_steps = 0
+        self._force_buf = np.zeros(6)
 
     # ------------------------------------------------------------------
     # 커리큘럼용
@@ -279,6 +285,23 @@ class PushEnvV2(gym.Env):
                     return True
         return False
 
+    def _robot_table_contact(self):
+        """로봇 geom이 테이블에 닿았는지와 그 접촉들의 최대 법선 힘 [N]."""
+        c = self.data.contact
+        n = self.data.ncon
+        touched, fmax = False, 0.0
+        for i in range(n):
+            g1, g2 = int(c.geom1[i]), int(c.geom2[i])
+            if self.table_geom_id not in (g1, g2):
+                continue
+            other = g2 if g1 == self.table_geom_id else g1
+            if other == self.cube_geom_id:
+                continue
+            touched = True
+            mujoco.mj_contactForce(self.model, self.data, i, self._force_buf)
+            fmax = max(fmax, abs(float(self._force_buf[0])))
+        return touched, fmax
+
     def _place(self, cube_xy, goal_xy, yaw_deg: float) -> None:
         q = self.cube_qpos_id
         self.data.qpos[q:q + 2] = cube_xy
@@ -327,6 +350,7 @@ class PushEnvV2(gym.Env):
         self.steps = 0
         self.stable_count = 0
         self.max_cube_speed = 0.0
+        self.table_contact_steps = 0
         self.joint_target = self.data.qpos[self.qpos_ids].copy()
         self.data.ctrl[self.actuator_ids] = self.joint_target
         delay = int(self.physics["action_delay"])
@@ -396,8 +420,13 @@ class PushEnvV2(gym.Env):
             direction = (self.goal[:2] - cube_pos[:2]) / goal_distance
             push_point = cube_pos.copy()
             push_point[:2] -= direction * (CUBE_HALF + cfg["push_margin"])
+            push_point[2] += cfg["push_point_height"]
             ee_reward_distance = float(np.linalg.norm(push_point - ee_pos))
         self.prev_goal_distance = goal_distance
+
+        # 로봇-테이블 접촉 (큐브-테이블 접촉은 제외)
+        table_contact, table_force = self._robot_table_contact()
+        self.table_contact_steps += int(table_contact)
 
         on_table = abs(cube_pos[2] - CUBE_HALF) < 0.01
         in_zone = goal_distance < cfg["success_radius"] and on_table
@@ -423,6 +452,9 @@ class PushEnvV2(gym.Env):
         if goal_distance < 2.0 * cfg["success_radius"]:
             reward -= cfg["w_zone_speed"] * lin_speed
         reward -= cfg["time_penalty"]
+        if table_contact:
+            reward -= cfg["w_table_contact"]
+            reward -= cfg["w_table_force"] * min(table_force, cfg["table_force_cap"]) / cfg["table_force_cap"]
         if success:
             reward += cfg["success_bonus"]
         if fallen:
@@ -437,6 +469,9 @@ class PushEnvV2(gym.Env):
             "distance": goal_distance,
             "ee_distance": ee_distance,
             "ee_reward_distance": ee_reward_distance,
+            "table_contact": bool(table_contact),
+            "table_force": table_force,
+            "table_contact_ratio": self.table_contact_steps / self.steps,
             "in_zone": bool(in_zone),
             "stable_time": self.stable_count * self.control_dt,
             "cube_speed": lin_speed,

@@ -39,6 +39,7 @@ for name, exp in CONFIGS.items():
         if term or trunc:
             obs, _ = env.reset()
     check(finite and obs.shape == env.observation_space.shape, f"{name}: obs {obs.shape}, 값 정상")
+    check(0.0 <= info.get("table_contact_ratio", -1) <= 1.0, f"{name}: 테이블 접촉 비율 기록 ({info['table_contact_ratio']:.0%})")
     env.close()
 
 print("\n2) 태스크 랜덤화")

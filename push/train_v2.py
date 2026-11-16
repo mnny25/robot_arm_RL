@@ -50,6 +50,7 @@ MONITOR_KEYS = (
     "is_success",
     "distance",
     "max_cube_speed",
+    "table_contact_ratio",
     "range_scale",
     "friction",
     "mass",
@@ -111,15 +112,18 @@ class EpisodeStatsCallback(BaseCallback):
         super().__init__(0)
         self.success = deque(maxlen=window)
         self.speed = deque(maxlen=window)
+        self.contact = deque(maxlen=window)
 
     def _on_step(self) -> bool:
         for info, done in zip(self.locals["infos"], self.locals["dones"]):
             if done:
                 self.success.append(float(info.get("is_success", False)))
                 self.speed.append(float(info.get("max_cube_speed", 0.0)))
+                self.contact.append(float(info.get("table_contact_ratio", 0.0)))
         if self.success:
             self.logger.record("rollout/success_rate_100", float(np.mean(self.success)))
             self.logger.record("rollout/max_cube_speed_100", float(np.mean(self.speed)))
+            self.logger.record("rollout/table_contact_ratio_100", float(np.mean(self.contact)))
         return True
 
 
@@ -214,6 +218,9 @@ def main():
     p.add_argument("--tag", default="")
     p.add_argument("--out-root", default=str(PROJECT_ROOT / "results" / "v2"))
     p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--curriculum-threshold", type=float, default=None,
+                   help="범위를 넓히는 최근 성공률 기준 (기본: 설정의 curriculum_threshold, 없으면 0.8)")
+    p.add_argument("--curriculum-increment", type=float, default=0.1, help="한 번에 넓히는 range_scale 양")
     args = p.parse_args()
 
     torch.set_num_threads(1)
@@ -223,6 +230,9 @@ def main():
     exp = get_config(args.config)
     env_cfg = make_config(exp["env"])
     use_curriculum = bool(exp.get("curriculum", False))
+    curr_threshold = args.curriculum_threshold
+    if curr_threshold is None:
+        curr_threshold = float(exp.get("curriculum_threshold", 0.8))
 
     from pathlib import Path
 
@@ -243,6 +253,8 @@ def main():
         "n_envs": n_envs,
         "device": device,
         "curriculum": use_curriculum,
+        "curriculum_threshold": curr_threshold,
+        "curriculum_increment": args.curriculum_increment,
         "env_config": env_cfg,
         "git": git_info(),
         "versions": versions(),
@@ -292,7 +304,7 @@ def main():
         EpisodeStatsCallback(),
     ]
     if use_curriculum:
-        callbacks.append(CurriculumCallback())
+        callbacks.append(CurriculumCallback(threshold=curr_threshold, increment=args.curriculum_increment))
 
     try:
         model.learn(total_timesteps=args.steps, callback=CallbackList(callbacks), progress_bar=False)

@@ -19,6 +19,10 @@ FULL_DR = {
 # EE를 '밀 위치'(큐브의 목표 반대편)로 유도하는 보상 설정
 PP = {"ee_target": "push_point", "w_ee": 2.0}
 
+# 로봇(집게)이 테이블에 닿거나 누르면 페널티 (Sim-to-Real: 테이블 긁기 방지)
+# 접촉 스텝당 0.5 + 접촉 힘 비례 최대 0.5 → 다른 항(스텝당 약 -0.5~-1)과 비슷한 크기
+CONTACT = {"w_table_contact": 0.5, "w_table_force": 0.5, "table_force_cap": 20.0}
+
 CONFIGS = {
     # ---- Phase 1: 성공 판정(hold) 효과 확인, 위치 고정 ----
     # 기존 실험 재현용: 원에 들어가는 순간 성공, 속도 페널티 없음
@@ -84,6 +88,33 @@ CONFIGS = {
     },
     "rand_pp_dr_full_real": {
         "env": {**PP, "range_scale": 1.0, "dr": FULL_DR, "obs_mode": "real"},
+        "curriculum": True,
+    },
+
+    # ---- Phase 4: 테이블 접촉 페널티 (DR 없음, rand_pp가 비교 기준) ----
+    "rand_pp_contact": {
+        "env": {**PP, **CONTACT, "range_scale": 1.0},
+        "curriculum": True,
+    },
+    # 접촉 페널티 + push point를 5mm 올림 (EE가 테이블에서 떨어진 채 밀도록)
+    "rand_pp_contact_up": {
+        "env": {**PP, **CONTACT, "range_scale": 1.0, "push_point_height": 0.005},
+        "curriculum": True,
+    },
+
+    # ---- Phase 3 원인 찾기 (ablation): FULL_DR의 요소를 하나씩만 켬 ----
+    "rand_pp_dr_delay": {
+        "env": {**PP, "range_scale": 1.0, "dr": {"action_delay_max": 2}},
+        "curriculum": True,
+    },
+    "rand_pp_dr_obs": {
+        "env": {**PP, "range_scale": 1.0,
+                "dr": {"obs_noise_std": 0.003, "cube_pos_bias_std": 0.003}},
+        "curriculum": True,
+    },
+    "rand_pp_dr_dyn": {
+        "env": {**PP, "range_scale": 1.0,
+                "dr": {"kp_scale": (0.8, 1.2), "damping_scale": (0.8, 1.2), "mass": (0.03, 0.08)}},
         "curriculum": True,
     },
 }

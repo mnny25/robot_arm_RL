@@ -111,6 +111,7 @@ def run_episode(env, policy, vec_norm, task, physics, seed):
                 "time_s": env.steps * env.control_dt,
                 "final_dist_mm": info["distance"] * 1000,
                 "max_cube_speed": info["max_cube_speed"],
+                "table_contact_ratio": info.get("table_contact_ratio", 0.0),
                 "return": ret,
             }
 
@@ -122,7 +123,7 @@ def summarize(rows):
     for r in rows:
         key = (r["config"], r["algo"], r["condition"], r["split"])
         per_run[(key, r["run"])].append(r["success"])
-        extra[key].append((r["max_cube_speed"], r["final_dist_mm"], r["success"]))
+        extra[key].append((r["max_cube_speed"], r["final_dist_mm"], r["success"], r["table_contact_ratio"]))
     grouped = defaultdict(list)
     for (key, _run), succ in per_run.items():
         grouped[key].append(float(np.mean(succ)))
@@ -141,6 +142,7 @@ def summarize(rows):
             "max_cube_speed_mean": float(np.mean(sp)),
             "max_cube_speed_success_mean": float(np.mean(sp_ok)) if sp_ok else float("nan"),
             "n_success": len(sp_ok),
+            "table_contact_ratio_mean": float(np.mean([e[3] for e in extra[key]])),
             "final_dist_mm_mean": float(np.mean(di)),
         })
     return out
@@ -204,14 +206,15 @@ def main():
         w.writeheader()
         w.writerows(summary)
 
-    print("\n설정 / 알고리즘 / 조건 / split : 성공률 평균±표준편차 (run 수) | 최대 큐브속도 전체 / 성공만 | 최종거리")
+    print("\n설정 / 알고리즘 / 조건 / split : 성공률 평균±표준편차 (run 수) | 최대 큐브속도 전체 / 성공만 | 최종거리 | 테이블 접촉 스텝 비율")
     for s in summary:
         ok_speed = s["max_cube_speed_success_mean"]
         ok_text = f"{ok_speed:.2f} (성공 {s['n_success']}회)" if s["n_success"] else "- (성공 0회)"
         print(
             f"{s['config']:<18} {s['algo']:<4} {s['condition']:<16} {s['split']:<8}: "
             f"{s['success_mean']:.2f}±{s['success_std']:.2f} (n={s['n_runs']}) | "
-            f"{s['max_cube_speed_mean']:.2f} / {ok_text} m/s | {s['final_dist_mm_mean']:.1f} mm"
+            f"{s['max_cube_speed_mean']:.2f} / {ok_text} m/s | {s['final_dist_mm_mean']:.1f} mm | "
+            f"테이블 접촉 {s['table_contact_ratio_mean']:.0%}"
         )
     print("\n저장:", out, "/", sum_path)
 
