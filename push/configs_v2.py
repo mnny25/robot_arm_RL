@@ -96,6 +96,12 @@ CONFIGS = {
         "env": {**PP, **CONTACT, "range_scale": 1.0},
         "curriculum": True,
     },
+    # 접촉 페널티 + 마찰 DR (최종 후보). 근거: SAC는 노이즈·지연·kp에 원래 강건하고 약점은 높은 마찰뿐
+    # (민감도: 마찰 1.5 → 0.80, 2.0 → 0.64). rand_pp_contact와 비교하면 마찰 DR 효과만 분리됨
+    "rand_pp_contact_drf": {
+        "env": {**PP, **CONTACT, "range_scale": 1.0, "dr": {"friction": (0.5, 2.0)}},
+        "curriculum": True,
+    },
     # 접촉 페널티 + push point를 5mm 올림 (EE가 테이블에서 떨어진 채 밀도록)
     "rand_pp_contact_up": {
         "env": {**PP, **CONTACT, "range_scale": 1.0, "push_point_height": 0.005},

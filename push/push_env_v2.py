@@ -444,19 +444,19 @@ class PushEnvV2(gym.Env):
         fallen = bool(cube_pos[2] < -0.02)
 
         # ---- 보상 ----
-        reward = -cfg["w_ee"] * ee_reward_distance
-        reward -= cfg["w_goal"] * goal_distance
-        reward += cfg["w_progress"] * progress
-        reward -= cfg["w_action"] * float(np.sum(action ** 2))
-        reward -= cfg["w_cube_speed"] * max(0.0, lin_speed - cfg["cube_speed_free"])
+        reward = -cfg["w_ee"] * ee_reward_distance # 팔이 밀 위치에서 10cm 떨어짐 (-0.2)
+        reward -= cfg["w_goal"] * goal_distance # 큐브가 목표에서 10cm (-0.5)
+        reward += cfg["w_progress"] * progress # 이번 스텝에 목표에 가까워진 만큼 (0.2)
+        reward -= cfg["w_action"] * float(np.sum(action ** 2)) # 행동 크기 (-0.05)
+        reward -= cfg["w_cube_speed"] * max(0.0, lin_speed - cfg["cube_speed_free"]) # 큐브가 너무 빠름 (-0.63)
         if goal_distance < 2.0 * cfg["success_radius"]:
-            reward -= cfg["w_zone_speed"] * lin_speed
+            reward -= cfg["w_zone_speed"] * lin_speed # 목표 근처에서 큐브가 움직임 (-0.6)
         reward -= cfg["time_penalty"]
         if table_contact:
             reward -= cfg["w_table_contact"]
             reward -= cfg["w_table_force"] * min(table_force, cfg["table_force_cap"]) / cfg["table_force_cap"]
         if success:
-            reward += cfg["success_bonus"]
+            reward += cfg["success_bonus"] # 성공 보상 (+10)
         if fallen:
             reward -= cfg["fall_penalty"]
 
