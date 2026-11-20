@@ -17,6 +17,7 @@ reset(options=...)으로 큐브·목표 위치와 물리 조건을 직접 지정
 from __future__ import annotations
 
 import copy
+import json
 import math
 from collections import deque
 
@@ -75,6 +76,8 @@ DEFAULT_CONFIG = {
     # ---- 태스크 랜덤화 ----
     "nominal_cube_xy": (0.22, 0.0),    # 기존 scene.xml 큐브 위치
     "nominal_goal_xy": (0.30, 0.06),   # 기존 scene.xml 목표 위치
+    "sample_full_table": False,       # True면 테이블 전체에서 큐브와 목표를 각각 샘플링
+    "recovery_start_prob": 0.0,        # 실패 궤적에서 추출한 자세로 시작할 확률
     "cube_xy_half_range": (0.04, 0.06),  # range_scale=1 일 때 큐브 x, y 반범위 [m]
     "goal_dist_range": (0.06, 0.12),     # 큐브→목표 거리 범위 [m]
     "goal_angle_center_deg": 0.0,        # 큐브→목표 방향 중심 (0도 = +x, 로봇 바깥쪽)
@@ -115,7 +118,14 @@ def make_config(overrides: dict | None = None) -> dict:
         if key not in cfg:
             raise KeyError(f"알 수 없는 설정 키: {key}")
         cfg[key] = copy.deepcopy(value)
+    if not 0.0 <= cfg["recovery_start_prob"] <= 1.0:
+        raise ValueError("recovery_start_prob는 0~1이어야 합니다.")
     return cfg
+
+
+def load_recovery_starts(split: str) -> list[dict]:
+    path = PROJECT_ROOT / "push" / "recovery_starts.json"
+    return json.loads(path.read_text(encoding="utf-8"))[split]
 
 
 class PushEnvV2(gym.Env):
@@ -142,6 +152,27 @@ class PushEnvV2(gym.Env):
         self.cube_geom_id = self.model.geom("cube_geom").id
         self.table_geom_id = self.model.geom("table_top").id
         self.target_site_id = self.model.site("target").id
+        if self.cfg["sample_full_table"]:
+            # scene.xml의 table_top은 월드 좌표축에 정렬된 박스다.
+            table_xy = self.model.geom_pos[self.table_geom_id, :2]
+            table_half = self.model.geom_size[self.table_geom_id, :2]
+            self._table_bounds = np.array([table_xy - table_half, table_xy + table_half])
+            self._cube_edge_margin = float(np.linalg.norm(self.model.geom_size[self.cube_geom_id, :2]))
+            self._goal_edge_margin = max(
+                self._cube_edge_margin,
+                float(self.model.site_size[self.target_site_id, 0]),
+                self.cfg["success_radius"],
+            )
+
+            # 베이스 메시는 시각용이라 접촉 목록으로 겹침을 검출할 수 없다.
+            mujoco.mj_kinematics(self.model, self.data)
+            base_geoms = self.model.geom_bodyid == self.model.body("base").id
+            rotations = self.data.geom_xmat[base_geoms].reshape(-1, 3, 3)
+            aabbs = self.model.geom_aabb[base_geoms]
+            centers = self.data.geom_xpos[base_geoms] + (rotations @ aabbs[:, :3, None])[:, :, 0]
+            half_sizes = (np.abs(rotations) @ aabbs[:, 3:, None])[:, :, 0]
+            self._base_lower = (centers - half_sizes).min(axis=0)[:2]
+            self._base_upper = (centers + half_sizes).max(axis=0)[:2]
 
         self.lower = np.maximum(
             self.model.jnt_range[joint_ids, 0],
@@ -173,6 +204,8 @@ class PushEnvV2(gym.Env):
 
         # ---- 상태 ----
         self.range_scale = float(self.cfg["range_scale"])
+        self._recovery_starts = load_recovery_starts("train") if self.cfg["recovery_start_prob"] else []
+        self.recovery_start = False
         self.goal = np.zeros(3)
         self.joint_target = np.zeros(5)
         self.steps = 0
@@ -203,6 +236,9 @@ class PushEnvV2(gym.Env):
 
     def _sample_task(self):
         """range_scale에 따라 큐브·목표 위치를 샘플링."""
+        if self.cfg["sample_full_table"]:
+            return self._sample_full_table_task()
+
         rng = self.np_random
         s = self.range_scale
         cube_nom = np.array(self.cfg["nominal_cube_xy"], dtype=float)
@@ -226,6 +262,31 @@ class PushEnvV2(gym.Env):
             if self._in_workspace(cube_xy) and self._in_workspace(goal_xy):
                 return cube_xy, goal_xy
         return cube_nom.copy(), goal_nom.copy()
+
+    def _sample_full_table_task(self):
+        """기준 위치에서 시작해 테이블 가장자리까지 샘플 범위를 넓힌다."""
+        lower, upper = self._table_bounds
+        cube_nom = np.asarray(self.cfg["nominal_cube_xy"])
+        goal_nom = np.asarray(self.cfg["nominal_goal_xy"])
+        cube_margin, goal_margin = self._cube_edge_margin, self._goal_edge_margin
+        s = self.range_scale
+        cube_lo = cube_nom + s * (lower + cube_margin - cube_nom)
+        cube_hi = cube_nom + s * (upper - cube_margin - cube_nom)
+        goal_lo = goal_nom + s * (lower + goal_margin - goal_nom)
+        goal_hi = goal_nom + s * (upper - goal_margin - goal_nom)
+
+        cube_base_lo, cube_base_hi = self._base_lower - cube_margin, self._base_upper + cube_margin
+        goal_base_lo, goal_base_hi = self._base_lower - goal_margin, self._base_upper + goal_margin
+        for _ in range(100):
+            cube_xy = self.np_random.uniform(cube_lo, cube_hi)
+            goal_xy = self.np_random.uniform(goal_lo, goal_hi)
+            if np.all((cube_xy >= cube_base_lo) & (cube_xy <= cube_base_hi)):
+                continue
+            if np.all((goal_xy >= goal_base_lo) & (goal_xy <= goal_base_hi)):
+                continue
+            if np.linalg.norm(cube_xy - goal_xy) > self.cfg["success_radius"]:
+                return cube_xy, goal_xy
+        raise RuntimeError("테이블 위에서 서로 떨어진 큐브와 목표 위치를 찾지 못했습니다.")
 
     def _sample_physics(self) -> dict:
         p = dict(NOMINAL_PHYSICS)
@@ -318,6 +379,7 @@ class PushEnvV2(gym.Env):
          "range_scale": 0.5,
          "physics": {"friction": 1.5, "mass": 0.1, "kp_scale": 0.8, ...}}
         physics를 주면 DR 샘플링 대신 그 값을 쓰고, 빠진 항목은 기본값.
+        recovery_start를 주면 해당 큐브·목표·팔 자세에서 정지한 상태로 시작.
         """
         super().reset(seed=seed)
         options = options or {}
@@ -332,20 +394,43 @@ class PushEnvV2(gym.Env):
         self._apply_physics(self.physics)
 
         fixed_task = "cube_xy" in options and "goal_xy" in options
+        recovery = options.get("recovery_start")
+        if recovery is not None and ("cube_xy" in options or "goal_xy" in options or "cube_yaw_deg" in options):
+            raise ValueError("recovery_start에는 큐브와 목표 배치가 포함되어 있습니다.")
+        if recovery is None and not fixed_task and self._recovery_starts:
+            if self.np_random.random() < self.cfg["recovery_start_prob"]:
+                recovery = self._recovery_starts[self.np_random.integers(len(self._recovery_starts))]
+        self.recovery_start = recovery is not None
         yaw_h = self.cfg["cube_yaw_half_range_deg"] * self.range_scale
 
         for _ in range(20):
             mujoco.mj_resetData(self.model, self.data)
-            if fixed_task:
+            if self.recovery_start:
+                cube_xy = np.asarray(recovery["cube_xy"], dtype=float)
+                goal_xy = np.asarray(recovery["goal_xy"], dtype=float)
+                yaw = recovery["cube_yaw_deg"]
+                qpos = np.asarray(recovery["arm_qpos"], dtype=float)
+                if qpos.shape != self.qpos_ids.shape or not np.all(np.isfinite(qpos)):
+                    raise ValueError("복구 시작 상태의 arm_qpos는 유한한 팔 관절 각도 5개여야 합니다.")
+                self.data.qpos[self.qpos_ids] = np.clip(qpos, self.lower, self.upper)
+            elif fixed_task:
                 cube_xy = np.asarray(options["cube_xy"], dtype=float)
                 goal_xy = np.asarray(options["goal_xy"], dtype=float)
             else:
                 cube_xy, goal_xy = self._sample_task()
-            yaw = options.get("cube_yaw_deg", self.np_random.uniform(-yaw_h, yaw_h) if yaw_h > 0 else 0.0)
+            if not self.recovery_start:
+                yaw = options.get("cube_yaw_deg", self.np_random.uniform(-yaw_h, yaw_h) if yaw_h > 0 else 0.0)
             self._place(cube_xy, goal_xy, yaw)
             mujoco.mj_forward(self.model, self.data)
+            if self.recovery_start:
+                if self._cube_touches_non_table() or self._robot_table_contact()[0]:
+                    raise ValueError("복구 시작 상태에서 큐브나 로봇이 다른 물체와 겹칩니다.")
+                break
             if fixed_task or not self._cube_touches_non_table():
                 break
+        else:
+            if self.cfg["sample_full_table"]:
+                raise RuntimeError("로봇과 겹치지 않는 큐브 시작 위치를 찾지 못했습니다.")
 
         self.steps = 0
         self.stable_count = 0
@@ -359,7 +444,10 @@ class PushEnvV2(gym.Env):
         cube_pos = self.data.body("cube").xpos
         self.prev_goal_distance = float(np.linalg.norm(self.goal[:2] - cube_pos[:2]))
 
-        info = {"cube_xy": np.array(cube_xy), "goal_xy": np.array(goal_xy), "physics": dict(self.physics)}
+        info = {
+            "cube_xy": np.array(cube_xy), "goal_xy": np.array(goal_xy),
+            "physics": dict(self.physics), "recovery_start": self.recovery_start,
+        }
         return self._get_obs(), info
 
     # ------------------------------------------------------------------
@@ -465,6 +553,7 @@ class PushEnvV2(gym.Env):
 
         info = {
             "is_success": bool(success),
+            "recovery_start": self.recovery_start,
             "fallen": fallen,
             "distance": goal_distance,
             "ee_distance": ee_distance,

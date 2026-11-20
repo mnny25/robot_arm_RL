@@ -24,7 +24,9 @@ def main():
     p.add_argument("--model", choices=["best", "final"], default="best")
     p.add_argument("--random", action="store_true", help="랜덤 행동으로 환경만 확인")
     p.add_argument("--config", default="rand", help="--random일 때 사용할 설정 이름")
-    p.add_argument("--nominal", action="store_true", help="기존 고정 위치에서 재생")
+    placement = p.add_mutually_exclusive_group()
+    placement.add_argument("--nominal", action="store_true", help="기존 고정 위치에서 재생")
+    placement.add_argument("--full-table", action="store_true", help="테이블 전체에서 큐브와 목표를 각각 뽑아 재생")
     p.add_argument("--friction", type=float, default=None)
     p.add_argument("--mass", type=float, default=None)
     p.add_argument("--kp-scale", type=float, default=1.0)
@@ -47,6 +49,8 @@ def main():
         meta, policy, env_cfg, vec_norm = load_run(Path(args.run), args.model)
         print("정책:", meta["run_name"])
 
+    if args.full_table:
+        env_cfg.update(sample_full_table=True, range_scale=1.0, recovery_start_prob=0.0)
     env = PushEnvV2(env_cfg)
     physics = {"friction": args.friction, "mass": args.mass, "kp_scale": args.kp_scale, "action_delay": args.delay}
 
@@ -64,6 +68,10 @@ def main():
         viewer.cam.distance = 0.8
         viewer.cam.azimuth = 135
         viewer.cam.elevation = -30
+        if env.cfg["sample_full_table"]:
+            viewer.cam.lookat[:] = [*env.model.geom_pos[env.table_geom_id, :2], 0.0]
+            viewer.cam.distance = 1.3
+            viewer.cam.elevation = -75
         while viewer.is_running():
             start = time.perf_counter()
             if policy is None:

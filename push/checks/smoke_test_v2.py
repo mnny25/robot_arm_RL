@@ -4,7 +4,7 @@
 
 확인 항목
  1. 모든 설정으로 환경 생성, SB3 check_env 통과, 랜덤 행동 100 스텝
- 2. 태스크 랜덤화: range_scale=0이면 기존 위치, 1이면 퍼져 있는지 / 타깃 표시 이동
+ 2. 태스크 랜덤화: 기존 위치 범위, 테이블 전체 배치, 복구 시작
  3. hold 판정: 큐브를 목표에 올려놓고 가만히 두면 hold_time 후에 성공하는지
     require_stable=False면 첫 스텝에 바로 성공하는지
  4. DR: 물리값이 실제로 바뀌고, physics 미지정 시 원래 값으로 돌아오는지
@@ -16,7 +16,7 @@ import numpy as np
 from stable_baselines3.common.env_checker import check_env
 
 from push.configs_v2 import CONFIGS
-from push.push_env_v2 import PushEnvV2, make_config
+from push.push_env_v2 import PushEnvV2, load_recovery_starts, make_config
 
 ok = True
 
@@ -65,6 +65,69 @@ print(f"     scale=1 목표 x {goals[:, 0].min():.3f}~{goals[:, 0].max():.3f}, y
 check(np.ptp(cubes[:, 1]) > 0.08 and np.ptp(goals[:, 1]) > 0.1, "scale=1 위치가 넓게 퍼짐")
 site = env.model.site_pos[env.target_site_id][:2]
 check(np.allclose(site, goals[-1]), "뷰어 타깃 표시가 목표 위치로 이동")
+env.close()
+
+env = PushEnvV2(CONFIGS["rand_pp_contact_full_table"]["env"])
+cubes, goals = [], []
+no_initial_collision = True
+for seed in range(256):
+    _, info = env.reset(seed=seed, options={"cube_yaw_deg": 45})
+    cubes.append(info["cube_xy"])
+    goals.append(info["goal_xy"])
+    no_initial_collision &= not env._cube_touches_non_table()
+cubes, goals = np.array(cubes), np.array(goals)
+table = env.model.geom("table_top")
+lower, upper = table.pos[:2] - table.size[:2], table.pos[:2] + table.size[:2]
+cube_margin = np.sqrt(2) * env.model.geom("cube_geom").size[0]
+goal_margin = env.model.site("target").size[0]
+check(
+    np.all(cubes - cube_margin >= lower) and np.all(cubes + cube_margin <= upper)
+    and np.all(goals - goal_margin >= lower) and np.all(goals + goal_margin <= upper),
+    "테이블 전체 모드: 45° 회전 큐브와 목표 원이 모두 테이블 안에 있음",
+)
+check(
+    np.all(np.ptp(cubes, axis=0) > [0.65, 0.45]) and np.all(np.ptp(goals, axis=0) > [0.65, 0.45])
+    and np.any(goals[:, 0] < cubes[:, 0] - 0.12),
+    "테이블 전체 모드: 큐브와 목표가 넓게 퍼지며 목표가 큐브 뒤쪽에도 놓임",
+)
+check(
+    no_initial_collision and np.all(np.linalg.norm(goals - cubes, axis=1) > env.cfg["success_radius"]),
+    "테이블 전체 모드: 초기 충돌과 성공 반경 안 배치 제외",
+)
+check(
+    not any(np.any(np.all(np.abs(positions) < 0.06, axis=1)) for positions in (cubes, goals)),
+    "테이블 전체 모드: 로봇 베이스 자리 제외",
+)
+_, info = env.reset(seed=0, options={"range_scale": 0.0})
+check(
+    np.allclose(info["cube_xy"], [0.22, 0.0]) and np.allclose(info["goal_xy"], [0.30, 0.06]),
+    "테이블 전체 모드: scale=0은 기존 기준 위치에서 시작",
+)
+env.close()
+
+train_starts = load_recovery_starts("train")
+eval_starts = load_recovery_starts("evaluation")
+check(
+    bool(train_starts and eval_starts)
+    and {case["source"][1] for case in train_starts}.isdisjoint(case["source"][1] for case in eval_starts),
+    "복구 시작: 학습·평가의 원본 에피소드 시드가 분리됨",
+)
+env = PushEnvV2(CONFIGS["rand_pp_contact_drf_recovery"]["env"])
+valid_starts = True
+for case in train_starts + eval_starts:
+    _, info = env.reset(seed=0, options={"recovery_start": case})
+    distance = np.linalg.norm(info["cube_xy"] - info["goal_xy"])
+    valid_starts &= bool(
+        info["recovery_start"] and env.cfg["success_radius"] < distance < 0.10
+        and np.allclose(env.data.qvel, 0.0)
+        and np.allclose(env.joint_target, env.data.qpos[env.qpos_ids])
+        and env.stable_count == 0
+    )
+check(valid_starts, "복구 시작: 목표 밖에 놓인 정지 큐브, 초기 자세와 제어 목표 일치")
+mixed = [env.reset(seed=seed)[1]["recovery_start"] for seed in range(128)]
+check(0.15 < np.mean(mixed) < 0.35, "복구 시작: 일반 태스크에 약 25% 혼합")
+_, info = env.reset(seed=0, options={"cube_xy": (0.22, 0), "goal_xy": (0.30, 0.06)})
+check(not info["recovery_start"], "복구 시작: 고정 평가 위치 지정 시 일반 자세로 시작")
 env.close()
 
 

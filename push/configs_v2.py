@@ -96,6 +96,10 @@ CONFIGS = {
         "env": {**PP, **CONTACT, "range_scale": 1.0},
         "curriculum": True,
     },
+    "rand_pp_contact_full_table": {
+        "env": {**PP, **CONTACT, "range_scale": 1.0, "sample_full_table": True},
+        "curriculum": True,
+    },
     # 접촉 페널티 + 마찰 DR (최종 후보). 근거: SAC는 노이즈·지연·kp에 원래 강건하고 약점은 높은 마찰뿐
     # (민감도: 마찰 1.5 → 0.80, 2.0 → 0.64). rand_pp_contact와 비교하면 마찰 DR 효과만 분리됨
     "rand_pp_contact_drf": {
@@ -123,6 +127,12 @@ CONFIGS = {
                 "dr": {"kp_scale": (0.8, 1.2), "damping_scale": (0.8, 1.2), "mass": (0.03, 0.08)}},
         "curriculum": True,
     },
+}
+
+# contact_drf와 같은 조건에서 학습 에피소드의 25%를 복구 자세에서 시작한다.
+CONFIGS["rand_pp_contact_drf_recovery"] = {
+    **CONFIGS["rand_pp_contact_drf"],
+    "env": {**CONFIGS["rand_pp_contact_drf"]["env"], "recovery_start_prob": 0.25},
 }
 
 

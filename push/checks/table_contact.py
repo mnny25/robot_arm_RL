@@ -30,7 +30,7 @@ from push.push_env_v2 import PushEnvV2
 
 def run_one(run_dir: Path, episodes: int, which: str):
     meta, policy, cfg, vec_norm = load_run(run_dir, which)
-    env = PushEnvV2(cfg)
+    env = PushEnvV2({**cfg, "recovery_start_prob": 0.0})
     m, d = env.model, env.data
     parts = Counter()
     ratios, zmins, fmaxs, succ = [], [], [], []

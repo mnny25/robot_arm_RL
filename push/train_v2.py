@@ -48,6 +48,7 @@ from push.push_env_v2 import PushEnvV2, make_config
 
 MONITOR_KEYS = (
     "is_success",
+    "recovery_start",
     "distance",
     "max_cube_speed",
     "table_contact_ratio",
@@ -75,7 +76,7 @@ class CurriculumCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         for info, done in zip(self.locals["infos"], self.locals["dones"]):
-            if done:
+            if done and not info.get("recovery_start", False):
                 self.results.append(float(info.get("is_success", False)))
         if (
             self.scale < 1.0
@@ -272,7 +273,8 @@ def main():
 
     # 평가 환경: 항상 전체 범위(range_scale=1 설정값 그대로)에서 평가
     (out / "eval_monitor").mkdir()
-    eval_venv = DummyVecEnv([make_env(env_cfg, 0, args.seed + 10_000, out / "eval_monitor")])
+    eval_cfg = {**env_cfg, "recovery_start_prob": 0.0}
+    eval_venv = DummyVecEnv([make_env(eval_cfg, 0, args.seed + 10_000, out / "eval_monitor")])
     eval_venv = VecNormalize(eval_venv, norm_obs=True, norm_reward=False, training=False, clip_obs=10.0)
 
     try:

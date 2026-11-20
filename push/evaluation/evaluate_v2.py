@@ -12,6 +12,7 @@
     nominal : 기존 고정 위치 (큐브 0.22,0 → 목표 0.30,0.06)
     grid    : 학습 범위 안의 27개 조합 (큐브 3x3 x 방향 3)
     ood     : 학습 범위 밖 5개 조합 (일반화 확인용)
+    recovery: 학습 시작에 사용하지 않은 고정 복구 자세 (명시적으로 선택)
 
 suite (물리 조건)
     nominal / friction / mass / kp / delay / noise / all
@@ -33,7 +34,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from project_paths import PROJECT_ROOT
-from push.push_env_v2 import PushEnvV2, make_config
+from push.push_env_v2 import PushEnvV2, load_recovery_starts, make_config
 
 
 def polar_goal(cube_xy, angle_deg, dist):
@@ -94,9 +95,14 @@ def load_run(run_dir: Path, which: str):
     return meta, policy, env_cfg, vec_norm
 
 
-def run_episode(env, policy, vec_norm, task, physics, seed):
+def run_episode(env, policy, vec_norm, task, physics, seed, recovery_start=None):
     _, cube_xy, goal_xy = task
-    obs, _ = env.reset(seed=seed, options={"cube_xy": cube_xy, "goal_xy": goal_xy, "physics": physics})
+    options = {"physics": physics}
+    if recovery_start is None:
+        options.update(cube_xy=cube_xy, goal_xy=goal_xy)
+    else:
+        options["recovery_start"] = recovery_start
+    obs, _ = env.reset(seed=seed, options=options)
     ret = 0.0
     while True:
         o = vec_norm.normalize_obs(obs) if vec_norm is not None else obs
@@ -153,7 +159,8 @@ def main():
     p.add_argument("--runs", nargs="+", required=True, help="run 폴더 (glob 가능)")
     p.add_argument("--model", choices=["best", "final"], default="best")
     p.add_argument("--suite", choices=list(SUITES) + ["all"], default="nominal")
-    p.add_argument("--splits", nargs="+", default=["nominal", "grid", "ood"])
+    p.add_argument("--splits", nargs="+", choices=["nominal", "grid", "ood", "recovery"],
+                   default=["nominal", "grid", "ood"])
     p.add_argument("--out", default=None, help="기본: results/v2/eval_<suite>.csv")
     args = p.parse_args()
     torch.set_num_threads(1)
@@ -166,7 +173,10 @@ def main():
 
     suites = list(SUITES) if args.suite == "all" else [args.suite]
     conditions = [(s, c, phys) for s in suites for c, phys in SUITES[s]]
-    tasks = [t for t in build_tasks() if t[0] in args.splits]
+    tasks = [(task, None) for task in build_tasks() if task[0] in args.splits]
+    if "recovery" in args.splits:
+        for start in load_recovery_starts("evaluation"):
+            tasks.append((("recovery", start["cube_xy"], start["goal_xy"]), start))
 
     rows = []
     for run_dir in run_dirs:
@@ -178,8 +188,8 @@ def main():
         env = PushEnvV2(env_cfg)
         print(f"\n== {meta['run_name']} ({args.model}) : {len(conditions)} 조건 x {len(tasks)} 태스크")
         for suite, cond, phys in conditions:
-            for i, task in enumerate(tasks):
-                res = run_episode(env, policy, vec_norm, task, phys, seed=i)
+            for i, (task, recovery_start) in enumerate(tasks):
+                res = run_episode(env, policy, vec_norm, task, phys, seed=i, recovery_start=recovery_start)
                 rows.append({
                     "run": meta["run_name"], "config": meta["config_name"], "algo": meta["algo"],
                     "seed": meta["seed"], "model": args.model, "suite": suite, "condition": cond,

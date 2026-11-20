@@ -69,6 +69,39 @@ python -m push.play_v2 --run results/v2/rand_ppo_s0
 python -m push.play_v2 --run results/v2/rand_dr_full_ppo_s0 --friction 1.8 --kp-scale 0.7
 ```
 
+테이블 전체 배치는 기존 모델에 `--full-table`을 붙여 확인할 수 있습니다.
+
+```powershell
+python -m push.play_v2 --run results/v2/rand_pp_contact_drf_sac_s1 --full-table
+```
+
+큐브와 목표를 각각 뽑고, 테이블 가장자리와 베이스 자리에는 여유를 둡니다.
+전체 테이블에는 팔이 닿기 어려운 위치도 포함되므로 이 옵션은 기존 정책의 범위 밖 동작을 확인할 때 쓸 수 있습니다.
+같은 배치를 학습 환경에서 사용하려면 `rand_pp_contact_full_table` 설정을 선택합니다.
+
+## 큐브를 놓친 뒤 다시 미는 실험
+
+`rand_pp_contact_drf_recovery`는 기존 `rand_pp_contact_drf`와 같은 보상과 마찰 범위를 사용합니다.
+학습 에피소드의 25%에서 기존 정책의 궤적에서 추출한 팔·큐브 자세로 시작합니다.
+큐브가 목표 반경 밖에서 느려졌고 집게가 밀기 위치에서 벗어난 장면을 골랐습니다.
+재설정 시에는 팔과 큐브의 속도를 0으로 둡니다. 커리큘럼과 학습 중 best 모델 선정은 일반 시작 에피소드로 판단합니다.
+
+서버의 tmux에서 기존과 같은 시드 0·1·2, 각각 150만 스텝으로 새로 학습합니다.
+
+```bash
+MAX_JOBS=3 nice -n 19 bash push/run_experiments.sh phase5recovery
+```
+
+학습에 쓰지 않은 자세의 `recovery` 평가와 기존 `grid`를 함께 비교합니다.
+`grid`에서는 기존 과제 성공률 및 테이블 접촉 비율이 유지되는지 확인합니다.
+
+```bash
+python -m push.evaluation.evaluate_v2 \
+  --runs "results/v2/rand_pp_contact_drf_sac_s[012]" \
+         "results/v2/rand_pp_contact_drf_recovery_sac_s[012]" \
+  --suite nominal --splits grid recovery --out results/v2/eval_recovery.csv
+```
+
 ## 각 단계에서 볼 것
 
 | 단계 | 비교 | 확인할 지표 |
