@@ -7,6 +7,8 @@
   "n_envs": 1,
   "device": "auto",
   "curriculum": true,
+  "curriculum_threshold": 0.8,
+  "curriculum_increment": 0.1,
   "env_config": {
     "max_steps": 200,
     "control_dt": 0.05,
@@ -17,6 +19,12 @@
     "stable_lin_speed": 0.03,
     "stable_ang_speed": 0.5,
     "w_ee": 1.0,
+    "ee_target": "cube",
+    "push_margin": 0.015,
+    "push_point_height": 0.0,
+    "w_table_contact": 0.0,
+    "w_table_force": 0.0,
+    "table_force_cap": 20.0,
     "w_goal": 5.0,
     "w_progress": 20.0,
     "w_action": 0.01,
@@ -34,6 +42,8 @@
       0.3,
       0.06
     ],
+    "sample_full_table": false,
+    "recovery_start_prob": 0.0,
     "cube_xy_half_range": [
       0.04,
       0.06
@@ -59,7 +69,7 @@
     "obs_mode": "full"
   },
   "git": {
-    "commit": "3522ad9e2fb3e25b57eb6417477d57a657c07f07",
+    "commit": "0e916969d2f50441582be656edb2ad864a1f1f7c",
     "dirty": true
   },
   "versions": {
@@ -71,8 +81,8 @@
     "cuda_available": true
   },
   "host": "devbox",
-  "started": "2026-11-10T13:28:44",
+  "started": "2026-11-20T12:05:33",
   "command": "/home/pnudtn17/robot_arm_rl/push/train_v2.py --config rand --algo sac --seed 0 --steps 12000 --eval-every 6000 --eval-episodes 5 --tag smoke --overwrite",
-  "finished": "2026-11-10T13:29:12",
+  "finished": "2026-11-20T12:06:01",
   "trained_steps": 12000
 }
