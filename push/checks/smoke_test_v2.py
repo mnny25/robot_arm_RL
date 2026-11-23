@@ -105,6 +105,27 @@ check(
 )
 env.close()
 
+env = PushEnvV2(CONFIGS["rand_pp_contact_drf_full_table"]["env"])
+_, start = env.reset(seed=0, options={"range_scale": 0.0})
+check(
+    np.allclose(start["cube_xy"], [0.22, 0.0]) and np.allclose(start["goal_xy"], [0.30, 0.06]),
+    "밀기 경로 검사: 커리큘럼은 기준 배치부터 시작",
+)
+check(
+    not env._can_push_on_table(np.array([0.22, 0.0]), np.array([-0.20, 0.0]))
+    and not env._can_push_on_table(np.array([0.22, 0.0]), np.array([0.51, 0.26])),
+    "밀기 경로 검사: 베이스를 가로지르거나 집게가 닿기 어려운 모서리 배치를 거름",
+)
+starts = [env.reset(seed=seed, options={"range_scale": 1.0})[1] for seed in range(64)]
+cubes = np.array([info["cube_xy"] for info in starts])
+goals = np.array([info["goal_xy"] for info in starts])
+check(
+    np.any(np.abs(cubes[:, 1]) > 0.14) and np.any(goals[:, 0] < cubes[:, 0])
+    and np.max(np.linalg.norm(goals - cubes, axis=1)) > 0.20,
+    "밀기 경로 검사: 기존 구역 밖 위치, 안쪽 방향, 20cm 넘는 거리도 배치에 포함",
+)
+env.close()
+
 train_starts = load_recovery_starts("train")
 eval_starts = load_recovery_starts("evaluation")
 check(

@@ -27,6 +27,7 @@ import numpy as np
 from gymnasium import spaces
 
 from project_paths import PROJECT_ROOT
+from push.push_reach import PushReach
 
 
 ARM_JOINTS = [
@@ -77,6 +78,7 @@ DEFAULT_CONFIG = {
     "nominal_cube_xy": (0.22, 0.0),    # 기존 scene.xml 큐브 위치
     "nominal_goal_xy": (0.30, 0.06),   # 기존 scene.xml 목표 위치
     "sample_full_table": False,       # True면 테이블 전체에서 큐브와 목표를 각각 샘플링
+    "require_push_reach": False,     # 테이블 전체 모드에서 집게가 접근하고 밀 수 있는 배치만 사용
     "recovery_start_prob": 0.0,        # 실패 궤적에서 추출한 자세로 시작할 확률
     "cube_xy_half_range": (0.04, 0.06),  # range_scale=1 일 때 큐브 x, y 반범위 [m]
     "goal_dist_range": (0.06, 0.12),     # 큐브→목표 거리 범위 [m]
@@ -120,6 +122,8 @@ def make_config(overrides: dict | None = None) -> dict:
         cfg[key] = copy.deepcopy(value)
     if not 0.0 <= cfg["recovery_start_prob"] <= 1.0:
         raise ValueError("recovery_start_prob는 0~1이어야 합니다.")
+    if cfg["require_push_reach"] and not cfg["sample_full_table"]:
+        raise ValueError("require_push_reach를 사용하려면 sample_full_table이 필요합니다.")
     return cfg
 
 
@@ -182,6 +186,11 @@ class PushEnvV2(gym.Env):
             self.model.jnt_range[joint_ids, 1],
             self.model.actuator_ctrlrange[self.actuator_ids, 1],
         )
+        self._push_reach = None
+        if self.cfg["require_push_reach"]:
+            self._push_reach = PushReach(
+                self.model, self.qpos_ids, self.qvel_ids, self.lower, self.upper, self.cube_qpos_id
+            )
 
         self.frame_skip = max(1, round(self.cfg["control_dt"] / self.model.opt.timestep))
         self.control_dt = self.frame_skip * self.model.opt.timestep
@@ -277,16 +286,37 @@ class PushEnvV2(gym.Env):
 
         cube_base_lo, cube_base_hi = self._base_lower - cube_margin, self._base_upper + cube_margin
         goal_base_lo, goal_base_hi = self._base_lower - goal_margin, self._base_upper + goal_margin
-        for _ in range(100):
+        for _ in range(256 if self._push_reach is not None else 100):
             cube_xy = self.np_random.uniform(cube_lo, cube_hi)
             goal_xy = self.np_random.uniform(goal_lo, goal_hi)
             if np.all((cube_xy >= cube_base_lo) & (cube_xy <= cube_base_hi)):
                 continue
             if np.all((goal_xy >= goal_base_lo) & (goal_xy <= goal_base_hi)):
                 continue
-            if np.linalg.norm(cube_xy - goal_xy) > self.cfg["success_radius"]:
+            distance = np.linalg.norm(goal_xy - cube_xy)
+            if distance <= self.cfg["success_radius"]:
+                continue
+            if self._push_reach is None or self._can_push_on_table(cube_xy, goal_xy):
                 return cube_xy, goal_xy
+        if self._push_reach is not None:
+            raise RuntimeError("집게가 밀기 경로를 따라갈 수 있는 테이블 배치를 찾지 못했습니다.")
         raise RuntimeError("테이블 위에서 서로 떨어진 큐브와 목표 위치를 찾지 못했습니다.")
+
+    def _can_push_on_table(self, cube_xy, goal_xy):
+        delta = goal_xy - cube_xy
+        distance = np.linalg.norm(delta)
+        direction = delta / distance
+
+        # 큐브 중심의 직선 경로가 로봇 베이스를 지나가는 배치를 거른다.
+        cube_path = np.linspace(cube_xy, goal_xy, 1 + math.ceil(distance / 0.02))
+        margin = self._cube_edge_margin + 0.01
+        if np.any(np.all((cube_path >= self._base_lower - margin) & (cube_path <= self._base_upper + margin), axis=1)):
+            return False
+
+        behind_cube = cube_xy - direction * (CUBE_HALF + self.cfg["push_margin"])
+        behind_goal = goal_xy - direction * CUBE_HALF
+        height = CUBE_HALF + 0.006 + self.cfg["push_point_height"]
+        return self._push_reach.can_push(behind_cube, behind_goal, height)
 
     def _sample_physics(self) -> dict:
         p = dict(NOMINAL_PHYSICS)

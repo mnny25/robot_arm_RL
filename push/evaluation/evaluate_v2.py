@@ -13,6 +13,7 @@
     grid    : 학습 범위 안의 27개 조합 (큐브 3x3 x 방향 3)
     ood     : 학습 범위 밖 5개 조합 (일반화 확인용)
     recovery: 학습 시작에 사용하지 않은 고정 복구 자세 (명시적으로 선택)
+    reachable_table: 책상 위 밀기 경로 검사를 통과한 고정 배치 27개
 
 suite (물리 조건)
     nominal / friction / mass / kp / delay / noise / all
@@ -34,6 +35,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from project_paths import PROJECT_ROOT
+from push.configs_v2 import get_config
 from push.push_env_v2 import PushEnvV2, load_recovery_starts, make_config
 
 
@@ -57,6 +59,19 @@ def build_tasks():
     ]
     for cube, ang, dist in ood:
         tasks.append(("ood", cube, polar_goal(cube, ang, dist)))
+    return tasks
+
+
+def build_reachable_table_tasks():
+    cfg = get_config("rand_pp_contact_drf_full_table")["env"]
+    env = PushEnvV2({**cfg, "dr": None})
+    tasks = []
+    try:
+        for seed in range(20_000, 20_027):
+            _, info = env.reset(seed=seed)
+            tasks.append(("reachable_table", info["cube_xy"], info["goal_xy"]))
+    finally:
+        env.close()
     return tasks
 
 
@@ -159,7 +174,7 @@ def main():
     p.add_argument("--runs", nargs="+", required=True, help="run 폴더 (glob 가능)")
     p.add_argument("--model", choices=["best", "final"], default="best")
     p.add_argument("--suite", choices=list(SUITES) + ["all"], default="nominal")
-    p.add_argument("--splits", nargs="+", choices=["nominal", "grid", "ood", "recovery"],
+    p.add_argument("--splits", nargs="+", choices=["nominal", "grid", "ood", "recovery", "reachable_table"],
                    default=["nominal", "grid", "ood"])
     p.add_argument("--out", default=None, help="기본: results/v2/eval_<suite>.csv")
     args = p.parse_args()
@@ -174,6 +189,8 @@ def main():
     suites = list(SUITES) if args.suite == "all" else [args.suite]
     conditions = [(s, c, phys) for s in suites for c, phys in SUITES[s]]
     tasks = [(task, None) for task in build_tasks() if task[0] in args.splits]
+    if "reachable_table" in args.splits:
+        tasks.extend((task, None) for task in build_reachable_table_tasks())
     if "recovery" in args.splits:
         for start in load_recovery_starts("evaluation"):
             tasks.append((("recovery", start["cube_xy"], start["goal_xy"]), start))

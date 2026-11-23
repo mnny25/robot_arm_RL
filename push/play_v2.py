@@ -27,6 +27,7 @@ def main():
     placement = p.add_mutually_exclusive_group()
     placement.add_argument("--nominal", action="store_true", help="기존 고정 위치에서 재생")
     placement.add_argument("--full-table", action="store_true", help="테이블 전체에서 큐브와 목표를 각각 뽑아 재생")
+    placement.add_argument("--reachable-table", action="store_true", help="책상 위에서 밀기 경로 검사를 통과한 배치로 재생")
     p.add_argument("--friction", type=float, default=None)
     p.add_argument("--mass", type=float, default=None)
     p.add_argument("--kp-scale", type=float, default=1.0)
@@ -49,8 +50,11 @@ def main():
         meta, policy, env_cfg, vec_norm = load_run(Path(args.run), args.model)
         print("정책:", meta["run_name"])
 
-    if args.full_table:
-        env_cfg.update(sample_full_table=True, range_scale=1.0, recovery_start_prob=0.0)
+    if args.full_table or args.reachable_table:
+        env_cfg.update(
+            sample_full_table=True, require_push_reach=args.reachable_table,
+            range_scale=1.0, recovery_start_prob=0.0,
+        )
     env = PushEnvV2(env_cfg)
     physics = {"friction": args.friction, "mass": args.mass, "kp_scale": args.kp_scale, "action_delay": args.delay}
 

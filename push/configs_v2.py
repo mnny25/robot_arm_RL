@@ -135,6 +135,16 @@ CONFIGS["rand_pp_contact_drf_recovery"] = {
     "env": {**CONFIGS["rand_pp_contact_drf"]["env"], "recovery_start_prob": 0.25},
 }
 
+# 배치만 넓혀 contact_drf와 비교한다.
+CONFIGS["rand_pp_contact_drf_full_table"] = {
+    **CONFIGS["rand_pp_contact_drf"],
+    "env": {
+        **CONFIGS["rand_pp_contact_drf"]["env"],
+        "sample_full_table": True,
+        "require_push_reach": True,
+    },
+}
+
 
 def get_config(name: str) -> dict:
     if name not in CONFIGS:

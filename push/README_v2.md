@@ -77,7 +77,29 @@ python -m push.play_v2 --run results/v2/rand_pp_contact_drf_sac_s1 --full-table
 
 큐브와 목표를 각각 뽑고, 테이블 가장자리와 베이스 자리에는 여유를 둡니다.
 전체 테이블에는 팔이 닿기 어려운 위치도 포함되므로 이 옵션은 기존 정책의 범위 밖 동작을 확인할 때 쓸 수 있습니다.
-같은 배치를 학습 환경에서 사용하려면 `rand_pp_contact_full_table` 설정을 선택합니다.
+
+## 책상 위 작업 범위 확장
+
+`rand_pp_contact_drf_full_table`은 큐브와 목표를 책상 위에서 각각 뽑습니다.
+큐브 뒤로 접근하는 지점부터 목표 방향의 밀기 경로까지 역기구학으로 집게 위치를 확인하고,
+관절 한계나 시뮬레이션 충돌에 걸리는 배치를 거릅니다.
+위치와 충돌을 샘플링한 검사이므로, 집게 방향과 실제 물리에서의 밀기 성공을 보장하지는 않습니다.
+학습은 기존 기준 배치에서 시작해 커리큘럼으로 범위를 넓히며, 보상과 마찰 범위는 `rand_pp_contact_drf`와 같습니다.
+
+서버의 tmux에서 사용할 GPU를 지정해 실행합니다. 시드 0·1·2를 각각 150만 스텝 학습합니다.
+
+```bash
+CUDA_VISIBLE_DEVICES=5 bash push/run_experiments.sh phase6fulltable
+```
+
+아래 평가는 기존 모델과 새 모델에 같은 고정 배치를 적용합니다.
+
+```bash
+python -m push.evaluation.evaluate_v2 --runs "results/v2/rand_pp_contact_drf_sac_s[012]" "results/v2/rand_pp_contact_drf_full_table_sac_s[012]" --suite nominal --splits grid reachable_table --out results/v2/eval_full_table.csv
+```
+
+로컬에서 기존 모델로 검사한 넓은 배치를 미리 보려면 `--reachable-table`을 붙입니다.
+`--full-table`은 밀기 경로 검사 없이 책상 전체를 샘플링합니다.
 
 ## 큐브를 놓친 뒤 다시 미는 실험
 
