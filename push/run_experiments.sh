@@ -13,6 +13,7 @@
 #   bash push/run_experiments.sh phase4dr      # 접촉 페널티 + 마찰 DR 0.5~2.0 (SAC 150만, 시드 3개)
 #   bash push/run_experiments.sh phase5recovery # 실패 자세에서 다시 미는 학습 (SAC 150만, 시드 3개)
 #   bash push/run_experiments.sh phase6fulltable # 책상 위에서 밀 수 있는 배치 학습 (SAC 150만, 시드 3개)
+#   N_ENVS=6 MAX_JOBS=2 bash push/run_experiments.sh phase7realppo # Real 관측 PPO, DR 없음 vs 전체 항목 약하게
 #
 # 환경변수로 조절:
 #   SEEDS="0 1 2"  STEPS=1000000  N_ENVS=8  MAX_JOBS=3
@@ -129,24 +130,36 @@ case "$PHASE" in
       run rand_pp_contact_drf_recovery sac "$s" "$STEPS"
     done
     ;;
-  phase6fulltable)
-    STEPS=${STEPS:-1500000}
+  phase6fulltable | phase7realppo)
+    if [[ "$PHASE" == phase6fulltable ]]; then
+      STEPS=${STEPS:-1500000}
+      configs=(rand_pp_contact_drf_full_table)
+      algo=sac
+      run_args=()
+    else
+      STEPS=${STEPS:-3000000}
+      configs=(rand_pp_contact_real rand_pp_contact_real_dr_mild)
+      algo=ppo
+      run_args=(--n-envs "$N_ENVS")
+    fi
     pids=()
     for s in $SEEDS; do
-      run rand_pp_contact_drf_full_table sac "$s" "$STEPS"
-      pids+=("$!")
+      for cfg in "${configs[@]}"; do
+        run "$cfg" "$algo" "$s" "$STEPS" "${run_args[@]}"
+        pids+=("$!")
+      done
     done
     failed=0
     for pid in "${pids[@]}"; do
       wait "$pid" || failed=1
     done
     if (( failed )); then
-      echo "학습 실행 실패. logs/rand_pp_contact_drf_full_table_sac_s*.log 확인." >&2
+      echo "$PHASE 학습 실행 실패. logs/ 확인." >&2
       exit 1
     fi
     ;;
   *)
-    echo "알 수 없는 단계: $PHASE (smoke | phase1 | phase1b | phase2 | phase3 | phase3sac | phase3diag | phase4contact | phase4dr | phase5recovery | phase6fulltable)"; exit 1 ;;
+    echo "알 수 없는 단계: $PHASE (smoke | phase1 | phase1b | phase2 | phase3 | phase3sac | phase3diag | phase4contact | phase4dr | phase5recovery | phase6fulltable | phase7realppo)"; exit 1 ;;
 esac
 wait
 echo "[$(date '+%m-%d %H:%M')] $PHASE 완료"

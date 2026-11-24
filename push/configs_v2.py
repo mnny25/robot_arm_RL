@@ -16,6 +16,17 @@ FULL_DR = {
     "action_delay_max": 2,        # 0~2 스텝(0~0.1초) 지연
 }
 
+# 실측값을 얻기 전의 시작 범위. 전체 DR과 같은 항목을 좁은 범위에서 적용한다.
+REAL_DR_MILD = {
+    "friction": (0.8, 1.2),
+    "mass": (0.04, 0.06),
+    "kp_scale": (0.9, 1.1),
+    "damping_scale": (0.9, 1.1),
+    "obs_noise_std": 0.001,
+    "cube_pos_bias_std": 0.001,
+    "action_delay_max": 1,
+}
+
 # EE를 '밀 위치'(큐브의 목표 반대편)로 유도하는 보상 설정
 PP = {"ee_target": "push_point", "w_ee": 2.0}
 
@@ -143,6 +154,16 @@ CONFIGS["rand_pp_contact_drf_full_table"] = {
         "sample_full_table": True,
         "require_push_reach": True,
     },
+}
+
+# 실물 관측으로 학습할 때 위치·보상은 고정하고 DR 적용 여부만 비교한다.
+CONFIGS["rand_pp_contact_real"] = {
+    "env": {**PP, **CONTACT, "range_scale": 1.0, "obs_mode": "real"},
+    "curriculum": True,
+}
+CONFIGS["rand_pp_contact_real_dr_mild"] = {
+    **CONFIGS["rand_pp_contact_real"],
+    "env": {**CONFIGS["rand_pp_contact_real"]["env"], "dr": REAL_DR_MILD},
 }
 
 

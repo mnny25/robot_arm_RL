@@ -17,6 +17,7 @@
 
 suite (물리 조건)
     nominal / friction / mass / kp / delay / noise / all
+    real_dr_mild / real_dr_full: 모든 DR 항목을 함께 바꾼 고정 물리 조건
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from project_paths import PROJECT_ROOT
-from push.configs_v2 import get_config
+from push.configs_v2 import FULL_DR, REAL_DR_MILD, get_config
 from push.push_env_v2 import PushEnvV2, load_recovery_starts, make_config
 
 
@@ -83,6 +84,23 @@ SUITES = {
     "delay": [(f"delay={d}", {"action_delay": d}) for d in (0, 1, 2, 3)],
     "noise": [(f"noise={n}", {"obs_noise_std": n}) for n in (0.0, 0.003, 0.005, 0.01)],
 }
+
+COMBINED_DR = {"real_dr_mild": REAL_DR_MILD, "real_dr_full": FULL_DR}
+
+
+def combined_dr_conditions(dr):
+    rng = np.random.default_rng(21_007)
+    conditions = [("nominal", {})]
+    for i in range(6):
+        physics = {key: float(rng.uniform(*dr[key])) for key in ("friction", "mass", "kp_scale", "damping_scale")}
+        bias_x, bias_y = rng.normal(0.0, dr["cube_pos_bias_std"], size=2)
+        physics.update(
+            obs_noise_std=dr["obs_noise_std"],
+            cube_pos_bias=(float(bias_x), float(bias_y), 0.0),
+            action_delay=i % (dr["action_delay_max"] + 1),
+        )
+        conditions.append((f"combined_{i + 1}", physics))
+    return conditions
 
 
 def load_run(run_dir: Path, which: str):
@@ -173,7 +191,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--runs", nargs="+", required=True, help="run 폴더 (glob 가능)")
     p.add_argument("--model", choices=["best", "final"], default="best")
-    p.add_argument("--suite", choices=list(SUITES) + ["all"], default="nominal")
+    p.add_argument("--suite", choices=[*SUITES, *COMBINED_DR, "all"], default="nominal")
     p.add_argument("--splits", nargs="+", choices=["nominal", "grid", "ood", "recovery", "reachable_table"],
                    default=["nominal", "grid", "ood"])
     p.add_argument("--out", default=None, help="기본: results/v2/eval_<suite>.csv")
@@ -186,8 +204,11 @@ def main():
     if not run_dirs:
         raise SystemExit("평가할 run 폴더가 없습니다 (config.json이 있는 폴더).")
 
-    suites = list(SUITES) if args.suite == "all" else [args.suite]
-    conditions = [(s, c, phys) for s in suites for c, phys in SUITES[s]]
+    if args.suite in COMBINED_DR:
+        conditions = [(args.suite, name, phys) for name, phys in combined_dr_conditions(COMBINED_DR[args.suite])]
+    else:
+        suites = list(SUITES) if args.suite == "all" else [args.suite]
+        conditions = [(s, c, phys) for s in suites for c, phys in SUITES[s]]
     tasks = [(task, None) for task in build_tasks() if task[0] in args.splits]
     if "reachable_table" in args.splits:
         tasks.extend((task, None) for task in build_reachable_table_tasks())

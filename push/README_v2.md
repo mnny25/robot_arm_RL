@@ -101,6 +101,28 @@ python -m push.evaluation.evaluate_v2 --runs "results/v2/rand_pp_contact_drf_sac
 로컬에서 기존 모델로 검사한 넓은 배치를 미리 보려면 `--reachable-table`을 붙입니다.
 `--full-table`은 밀기 경로 검사 없이 책상 전체를 샘플링합니다.
 
+## 실물 관측을 쓰는 PPO 비교
+
+`phase7realppo`는 큐브 자세와 속도를 관측에서 뺀 21차원 정책을 시뮬레이션에서 학습합니다.
+기존 작업 구역과 테이블 접촉 페널티를 사용합니다. 두 설정의 차이는 DR 적용 여부입니다.
+
+- `rand_pp_contact_real`은 DR 없이 학습하는 대조군입니다.
+- `rand_pp_contact_real_dr_mild`는 마찰 0.8~1.2, 질량 40~60g, kp와 관절 감쇠 ±10%, 큐브 위치 노이즈와 바이어스 각각 표준편차 1mm, 행동 지연 0~1스텝을 함께 적용합니다. 실측을 얻기 전의 시작 범위입니다.
+
+서버의 tmux에서 실행합니다. 설정마다 시드 3개를 각 300만 스텝 학습하고, 학습 두 개가 동시에 CPU 환경 6개씩 사용합니다.
+
+```bash
+N_ENVS=6 MAX_JOBS=2 nice -n 19 bash push/run_experiments.sh phase7realppo
+```
+
+기본 물리와 DR 항목을 함께 바꾼 6개 조건에서 두 설정의 최종 정책을 같은 배치로 평가합니다.
+
+```bash
+python -m push.evaluation.evaluate_v2 --runs "results/v2/rand_pp_contact_real_ppo_s[012]" "results/v2/rand_pp_contact_real_dr_mild_ppo_s[012]" --model final --suite real_dr_mild --splits grid --out results/v2/eval_real_ppo.csv
+```
+
+기존의 넓은 전체 DR 범위에서도 점검하려면 `--suite real_dr_full`과 별도의 출력 경로를 사용합니다.
+
 ## 큐브를 놓친 뒤 다시 미는 실험
 
 `rand_pp_contact_drf_recovery`는 기존 `rand_pp_contact_drf`와 같은 보상과 마찰 범위를 사용합니다.
